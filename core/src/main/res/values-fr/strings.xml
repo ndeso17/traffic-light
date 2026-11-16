@@ -34,7 +34,6 @@
     <string name="unknown">Inconnu</string>
     <string name="appearance">Apparence</string>
     <string name="behavior">Comportement</string>
-    <string name="shizuku_not_running">Shizuku n\'est pas lancé</string>
     <string name="sim_card">Carte SIM</string>
     <string name="data_plans">Forfaits de données</string>
     <string name="configure_plan">Configurer le plan</string>
