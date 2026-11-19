@@ -59,6 +59,8 @@ jobs:
             "ndk;30.0.16248370"
 
       - name: Build Full Debug APK
+        id: assemble
+        continue-on-error: true
         shell: bash
         run: |
           set -o pipefail
@@ -66,6 +68,7 @@ jobs:
             :app:assembleFullDebug --stacktrace 2>&1 | tee /tmp/assemble-full-debug.log
 
       - name: Upload Full Debug APK
+        if: steps.assemble.outcome == 'success'
         uses: actions/upload-artifact@v7
         with:
           name: trafficlight-full-debug-${{ github.sha }}
@@ -74,6 +77,8 @@ jobs:
           retention-days: 7
 
       - name: Unit test root spike protocol
+        id: spike_unit_test
+        continue-on-error: true
         shell: bash
         run: |
           set -o pipefail
@@ -81,29 +86,6 @@ jobs:
             :app:testFullDebugUnitTest \
             --tests "com.leekleak.trafficlight.spike.*" \
             --stacktrace 2>&1 | tee /tmp/spike-unit-test.log
-
-      - name: Diagnose unit test failure
-        if: failure()
-        shell: bash
-        run: |
-          set +e
-          if [ ! -f /tmp/spike-unit-test.log ]; then
-            echo "::error::unit test log missing"
-            exit 0
-          fi
-          {
-            echo "### Unit test failure diagnostics"
-            echo '```text'
-            grep -n -E "FAILURE:|BUILD FAILED|What went wrong|Execution failed for task|Could not (resolve|find)|error:|e: |Caused by:|Task .* not found|No tests found" \
-              /tmp/spike-unit-test.log | head -40
-            echo '```'
-          } | tee /tmp/diag.txt
-          cat /tmp/diag.txt >> "$GITHUB_STEP_SUMMARY"
-          grep -E "FAILURE:|BUILD FAILED|What went wrong|Execution failed for task|Could not (resolve|find)|Task .* not found|No tests found" \
-            /tmp/spike-unit-test.log | head -8 | sed -e 's/%/%25/g' -e 's/\r/%0D/g' | while IFS= read -r line; do
-            echo "::error::${line}"
-          done
-          exit 0
 
       - name: Prove Play and Lite do not carry libsu
         shell: bash
@@ -122,6 +104,32 @@ jobs:
             echo "${flavor}: no libsu dependency"
           done
 
+      - name: Diagnose failures
+        if: steps.assemble.outcome != 'success' || steps.spike_unit_test.outcome != 'success'
+        shell: bash
+        run: |
+          set +e
+          pattern="FAILURE:|BUILD FAILED|What went wrong|Execution failed for task|Could not (resolve|find|download)|error:|e: |Caused by:|Task .* not found|No tests found|Unresolved reference"
+          for log in /tmp/assemble-full-debug.log /tmp/spike-unit-test.log; do
+            if [ ! -f "$log" ]; then
+              echo "::warning::$log missing"
+              continue
+            fi
+            {
+              echo "### Diagnostics: $log"
+              echo '```text'
+              grep -n -E "$pattern" "$log" | head -30
+              echo '```'
+            } | tee -a /tmp/diagnostics.txt
+            grep -E "$pattern" "$log" | head -6 | sed -e 's/%/%25/g' -e 's/\r/%0D/g' | while IFS= read -r line; do
+              echo "::error::$(basename "$log"): ${line}"
+            done
+          done
+          if [ -f /tmp/diagnostics.txt ]; then
+            cat /tmp/diagnostics.txt >> "$GITHUB_STEP_SUMMARY"
+          fi
+          exit 0
+
       - name: Upload test reports
         if: always()
         uses: actions/upload-artifact@v7
@@ -132,3 +140,18 @@ jobs:
             app/build/test-results/**
           if-no-files-found: ignore
           retention-days: 7
+
+      - name: Enforce build and test results
+        if: always()
+        shell: bash
+        run: |
+          echo "assemble outcome: ${{ steps.assemble.outcome }}"
+          echo "unit test outcome: ${{ steps.spike_unit_test.outcome }}"
+          if [ "${{ steps.assemble.outcome }}" != "success" ]; then
+            echo "::error::Full Debug APK build did not succeed"
+            exit 1
+          fi
+          if [ "${{ steps.spike_unit_test.outcome }}" != "success" ]; then
+            echo "::error::root spike unit test did not succeed"
+            exit 1
+          fi
