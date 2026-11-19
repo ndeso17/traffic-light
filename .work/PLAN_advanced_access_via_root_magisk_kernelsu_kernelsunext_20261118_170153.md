@@ -68,6 +68,54 @@ List of devices attached
 - Deviasi: harness Full tidak dibuat karena tanpa perangkat ia tidak menghasilkan evidence dan menambah kode di luar kebutuhan spike saat ini.
 - Risiko baru: environment executor tidak menyediakan perangkat; WP-03 tetap diblokir sampai protocol telephony root memiliki evidence nyata atau alternatif disetujui.
 
+### Log WP-01 (Executor) — rework R1–R5
+
+Status WP tetap `wip`: harness sudah ada dan build terverifikasi, tetapi T-002–T-004 tetap `[ ]` karena belum ada evidence perangkat.
+
+Implementasi yang menutup rework:
+
+- REWORK-R1 (harness Full-only): harness berada di source set `fullDebug` saja (`RootSpikeProtocol.kt`, `RootSpikeActivity.kt`, `AndroidManifest.xml` launcher "Root Telephony Spike"), unit test di `app/src/testFullDebug/`. Tidak ada `su` path detection; ketersediaan root hanya dibuktikan dari grant eksplisit.
+- REWORK-R2 (allowlist dan fail-safe): empat command read-only sebagai konstanta allowlist, dua probe injeksi kegagalan terpisah (`false`, `sleep 5` dengan deadline 1 detik), timeout + cancel + tutup shell, dan tidak ada input pengguna yang diinterpolasi.
+- REWORK-R3 (evidence aman): file `Download/traffic-light-root-spike-attempt-<N>.txt` via MediaStore (API 29+) atau external-files aplikasi (API 28) berisi hanya field aman; attempt, exit code, kategori, jumlah record, dan flag keberadaan — tanpa nilai IMSI, tanpa output mentah, tanpa string command.
+- REWORK-R4 (build dan gating): workflow `.github/workflows/full-debug-apk.yml` membangun APK lewat GitHub Actions (batas environment tidak mengizinkan build Gradle lokal), menjalankan unit test spike, membuktikan libsu hanya pada `fullDebug`, dan memverifikasi simbol harness di dalam dex APK.
+- REWORK-R5 (dokumentasi): `.work/ROOT-SPIKE.md` memuat matriks target, allowlist, dua jalur baca, format evidence, dan prosedur verifikasi perangkat.
+
+Gate/evidence mentah:
+
+```text
+$ curl -s https://api.github.com/repos/ndeso17/traffic-light/actions/runs/44438632587/jobs
+JOB 135273685985 completed success
+   7 Build Full Debug APK | completed success
+   8 Upload Full Debug APK | completed success
+   9 Unit test root spike protocol | completed success
+   10 Prove Play and Lite do not carry libsu | completed success
+   11 Verify libsu reaches only the Full Debug variant | completed success
+   12 Verify spike harness is packaged | completed success
+   15 Enforce build and test results | completed success
+
+$ curl -s https://api.github.com/repos/ndeso17/traffic-light/actions/runs/44438632587/artifacts
+14490296132 trafficlight-full-debug-1228363401f0462ec5b06291ecd0cb98747e4862 18926284
+
+$ curl -s https://api.github.com/repos/ndeso17/traffic-light/check-runs/135273685985/annotations
+fullDebug runtime classpath libsu entries: +--- com.github.topjohnwu.libsu:core:6.0.0
+play: no libsu dependency
+lite: no libsu dependency
+dex contains: Lcom/leekleak/trafficlight/spike/RootSpikeActivity;
+dex contains: Lcom/leekleak/trafficlight/spike/RootSpikeProtocol;
+dex contains: Lcom/topjohnwu/superuser/Shell;
+```
+
+- Verifikasi lokal non-Gradle (tanpa Gradle, karena batas resource environment build): `K2JVMCompiler` + `android-37.2/android.jar` + libsu `classes.jar` → harness compile bersih; `JUnitCore` → `OK (27 tests)`.
+- Quality gate `bash gradlew test`: **tidak dijalankan ulang**; blocker MockK/ByteBuddy external attach dan dependensi Robolectric tetap tercatat sebagai blocker environment, tidak diklaim PASS.
+- Download artifact lewat API anonim ditolak `401 Requires authentication`; APK harus diunduh manual dari halaman run GitHub.
+
+Deviasi dan catatan teknis:
+
+- `fullDebugImplementation` tidak ada saat blok `dependencies` dievaluasi pada AGP 9.5.1 (`Configuration with name 'fullDebugImplementation' not found`), karena source set gabungan varian dibuat pada fase variant creation. Dependensi ditambahkan secara lazy via `configurations.configureEach` yang hanya menyasar `fullDebugImplementation`, sehingga `fullRelease`, `play`, dan `lite` tetap bebas libsu.
+- Bentuk lambda `configureEach` harus memakai receiver Gradle Kotlin DSL (`Configuration.() -> Unit`); bentuk parameter eksplisit ditolak dengan `Argument type mismatch` dan sudah dikoreksi.
+- Build lokal Gradle sengaja dihindari sesuai batasan environment (OOM dan reboot sebelumnya); otoritas build ada di GitHub Actions.
+- Risiko baru: environment executor tidak dapat mengunduh artifact tanpa kredensial GitHub, sehingga pemasangan APK dan pengumpulan evidence perangkat bergantung pada aksi pengguna; T-002–T-004 belum bisa diselesaikan sebelum file evidence `Download/traffic-light-root-spike-attempt-<N>.txt` dibaca.
+
 ---
 
 ## WP-02 — Domain contract privileged access

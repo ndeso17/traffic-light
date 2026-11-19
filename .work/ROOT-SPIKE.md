@@ -104,7 +104,17 @@ Jalankan pada build Full terinstrumentasi, lalu catat hanya evidence aman:
 
 ## Evidence executor saat ini
 
-Perintah:
+CI GitHub Actions run `44438632587` untuk commit `1228363` selesai **success**. Gerbang yang terbukti hijau:
+
+- `:app:assembleFullDebug` menghasilkan APK dan artifact `trafficlight-full-debug-1228363401f0462ec5b06291ecd0cb98747e4862` (artifact ID `14490296132`, 18,926,284 byte).
+- `:app:testFullDebugUnitTest --tests "com.leekleak.trafficlight.spike.*"` lulus (27 test protocol/evidence).
+- `fullDebugRuntimeClasspath` memuat `com.github.topjohnwu.libsu:core:6.0.0`.
+- `playDebugRuntimeClasspath` dan `liteDebugRuntimeClasspath` tidak memuat libsu/topjohnwu.
+- APK dex memuat `RootSpikeActivity`, `RootSpikeProtocol`, dan `com.topjohnwu.superuser.Shell`; merged manifest memuat activity dan kategori launcher.
+
+Verifikasi lokal non-Gradle juga mengompilasi source harness terhadap `android-37.2/android.jar` + libsu dan menjalankan JUnitCore dengan hasil `OK (27 tests)`. Build Gradle lokal sengaja tidak dijalankan karena batas resource environment; build otoritatif dilakukan di GitHub Actions.
+
+Perintah pemeriksaan koneksi perangkat:
 
 ```text
 adb devices -l
@@ -116,7 +126,7 @@ Output mentah:
 List of devices attached
 ```
 
-Interpretasi: ADB tersedia, tetapi tidak ada emulator atau perangkat fisik terhubung. Karena itu:
+Interpretasi: environment executor tidak memiliki perangkat ADB. APK siap dipasang manual, tetapi bukti perilaku perangkat tetap harus dikumpulkan. Karena itu:
 
 - T-002 belum terverifikasi: libsu grant dan no-prompt initialization memerlukan perangkat.
 - T-003 belum terverifikasi: UID root dan seluruh field subscription memerlukan perangkat rooted multi-SIM.
