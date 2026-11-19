@@ -1,7 +1,7 @@
 name: Build Full Debug APK
 
 permissions:
-  contents: read
+  contents: write
 
 on:
   workflow_dispatch:
@@ -188,6 +188,43 @@ jobs:
           fi
           exit 0
 
+      - name: Publish publicly downloadable APK
+        id: publish
+        if: >-
+          always() &&
+          steps.assemble.outcome == 'success' &&
+          steps.spike_unit_test.outcome == 'success' &&
+          steps.flavor_isolation.outcome == 'success' &&
+          steps.libsu_scope.outcome == 'success' &&
+          steps.harness_packaged.outcome == 'success'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          apk=$(ls app/build/outputs/apk/full/debug/*.apk | head -1)
+          cp "$apk" /tmp/traffic-light-full-debug.apk
+          sha256sum /tmp/traffic-light-full-debug.apk \
+            | cut -d' ' -f1 > /tmp/traffic-light-full-debug.apk.sha256
+          checksum=$(cat /tmp/traffic-light-full-debug.apk.sha256)
+          if ! gh release view root-spike-latest --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create root-spike-latest \
+              --repo "$GITHUB_REPOSITORY" \
+              --target "$GITHUB_SHA" \
+              --title "Root telephony spike — latest Full Debug" \
+              --notes "Debug-only device verification build. Do not use as a production release." \
+              --prerelease
+          fi
+          gh release upload root-spike-latest \
+            /tmp/traffic-light-full-debug.apk \
+            /tmp/traffic-light-full-debug.apk.sha256 \
+            --repo "$GITHUB_REPOSITORY" \
+            --clobber
+          {
+            echo "Public APK: https://github.com/${GITHUB_REPOSITORY}/releases/download/root-spike-latest/traffic-light-full-debug.apk"
+            echo "SHA-256: ${checksum}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Upload test reports
         if: always()
         uses: actions/upload-artifact@v7
@@ -208,6 +245,7 @@ jobs:
           echo "flavor isolation outcome: ${{ steps.flavor_isolation.outcome }}"
           echo "libsu scope outcome: ${{ steps.libsu_scope.outcome }}"
           echo "harness packaging outcome: ${{ steps.harness_packaged.outcome }}"
+          echo "public APK publish outcome: ${{ steps.publish.outcome }}"
           failed=0
           if [ "${{ steps.assemble.outcome }}" != "success" ]; then
             echo "::error::Full Debug APK build did not succeed"
@@ -227,6 +265,10 @@ jobs:
           fi
           if [ "${{ steps.harness_packaged.outcome }}" != "success" ]; then
             echo "::error::root spike harness is not packaged in the APK"
+            failed=1
+          fi
+          if [ "${{ steps.publish.outcome }}" != "success" ]; then
+            echo "::error::public APK publication did not succeed"
             failed=1
           fi
           exit "$failed"
