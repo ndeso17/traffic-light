@@ -90,7 +90,12 @@ class RootSpikeActivity : Activity() {
             } catch (_: Exception) {
                 failureEvidence("internal_failure")
             }
-            val destination = writeEvidence(evidence)
+            val destination = try {
+                writeEvidence(evidence)
+            } catch (failure: Exception) {
+                showResult("Attempt $attempt finished but evidence could not be written: ${failure.javaClass.simpleName}")
+                return@execute
+            }
             showResult("Attempt $attempt finished. Safe evidence written to:\n$destination\n\n$evidence")
         }
     }
@@ -311,19 +316,27 @@ class RootSpikeActivity : Activity() {
     )
 
     private fun writeEvidence(evidence: String): String {
-        val fileName = "traffic-light-root-spike.txt"
-        val values = ContentValues().apply {
-            put(MediaStore.Downloads.DISPLAY_NAME, fileName)
-            put(MediaStore.Downloads.MIME_TYPE, "text/plain")
-            put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
+        val fileName = "traffic-light-root-spike-attempt-$attempt.txt"
+        val bytes = evidence.toByteArray(StandardCharsets.UTF_8)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val values = ContentValues().apply {
+                put(MediaStore.Downloads.DISPLAY_NAME, fileName)
+                put(MediaStore.Downloads.MIME_TYPE, "text/plain")
+                put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
+            }
+            val resolver = contentResolver
+            val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
+                ?: error("Unable to create evidence file")
+            resolver.openOutputStream(uri, "w")!!.use { output -> output.write(bytes) }
+            return "Download/$fileName"
         }
-        val resolver = contentResolver
-        val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
-            ?: error("Unable to create evidence file")
-        resolver.openOutputStream(uri, "w")!!.use { output ->
-            output.write(evidence.toByteArray(StandardCharsets.UTF_8))
-        }
-        return "Download/$fileName"
+        // MediaStore.Downloads exists only on API 29+. On older releases the spike falls back
+        // to app-specific external storage, which needs no runtime permission.
+        val directory = getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)
+            ?: error("Unable to resolve evidence directory")
+        val file = java.io.File(directory, fileName)
+        file.writeBytes(bytes)
+        return file.absolutePath
     }
 
     private fun showResult(message: String) = runOnUiThread {

@@ -88,42 +88,48 @@ jobs:
             --stacktrace 2>&1 | tee /tmp/spike-unit-test.log
 
       - name: Prove Play and Lite do not carry libsu
+        id: flavor_isolation
+        continue-on-error: true
         shell: bash
         run: |
           set -euo pipefail
-          for flavor in play lite; do
-            echo "Checking ${flavor}DebugRuntimeClasspath for libsu"
-            ./gradlew --no-daemon --max-workers=2 \
-              :app:dependencies --configuration "${flavor}DebugRuntimeClasspath" \
-              > "/tmp/${flavor}-deps.txt"
-            if grep -qi "libsu\|topjohnwu" "/tmp/${flavor}-deps.txt"; then
-              echo "::error::${flavor} flavor resolves libsu/topjohnwu"
-              grep -i "libsu\|topjohnwu" "/tmp/${flavor}-deps.txt"
-              exit 1
-            fi
-            echo "${flavor}: no libsu dependency"
-          done
+          {
+            for flavor in play lite; do
+              echo "Checking ${flavor}DebugRuntimeClasspath for libsu"
+              ./gradlew --no-daemon --max-workers=2 \
+                :app:dependencies --configuration "${flavor}DebugRuntimeClasspath" \
+                > "/tmp/${flavor}-deps.txt"
+              if grep -qi "libsu\|topjohnwu" "/tmp/${flavor}-deps.txt"; then
+                echo "${flavor} flavor resolves libsu/topjohnwu"
+                grep -i "libsu\|topjohnwu" "/tmp/${flavor}-deps.txt"
+                exit 1
+              fi
+              echo "${flavor}: no libsu dependency"
+            done
+          } 2>&1 | tee /tmp/flavor-isolation.log
 
       - name: Diagnose failures
-        if: steps.assemble.outcome != 'success' || steps.spike_unit_test.outcome != 'success'
+        if: always() && (steps.assemble.outcome != 'success' || steps.spike_unit_test.outcome != 'success' || steps.flavor_isolation.outcome != 'success')
         shell: bash
         run: |
           set +e
-          pattern="FAILURE:|BUILD FAILED|What went wrong|Execution failed for task|Could not (resolve|find|download)|error:|e: |Caused by:|Task .* not found|No tests found|Unresolved reference"
-          for log in /tmp/assemble-full-debug.log /tmp/spike-unit-test.log; do
+          for log in /tmp/assemble-full-debug.log /tmp/spike-unit-test.log /tmp/flavor-isolation.log; do
             if [ ! -f "$log" ]; then
-              echo "::warning::$log missing"
+              echo "::warning::missing log $log"
               continue
             fi
+            block=$(awk '/FAILURE: Build failed/{flag=1} flag' "$log" | head -30)
+            if [ -z "$block" ]; then
+              block=$(tail -30 "$log")
+            fi
             {
-              echo "### Diagnostics: $log"
+              echo "### $(basename "$log")"
               echo '```text'
-              grep -n -E "$pattern" "$log" | head -30
+              printf '%s\n' "$block"
               echo '```'
             } | tee -a /tmp/diagnostics.txt
-            grep -E "$pattern" "$log" | head -6 | sed -e 's/%/%25/g' -e 's/\r/%0D/g' | while IFS= read -r line; do
-              echo "::error::$(basename "$log"): ${line}"
-            done
+            escaped=$(printf '%s' "$block" | head -25 | sed -e 's/%/%25/g' -e 's/\r//g' | awk '{printf "%s%%0A", $0}')
+            echo "::error title=$(basename "$log")::${escaped}"
           done
           if [ -f /tmp/diagnostics.txt ]; then
             cat /tmp/diagnostics.txt >> "$GITHUB_STEP_SUMMARY"
@@ -147,11 +153,18 @@ jobs:
         run: |
           echo "assemble outcome: ${{ steps.assemble.outcome }}"
           echo "unit test outcome: ${{ steps.spike_unit_test.outcome }}"
+          echo "flavor isolation outcome: ${{ steps.flavor_isolation.outcome }}"
+          failed=0
           if [ "${{ steps.assemble.outcome }}" != "success" ]; then
             echo "::error::Full Debug APK build did not succeed"
-            exit 1
+            failed=1
           fi
           if [ "${{ steps.spike_unit_test.outcome }}" != "success" ]; then
             echo "::error::root spike unit test did not succeed"
-            exit 1
+            failed=1
           fi
+          if [ "${{ steps.flavor_isolation.outcome }}" != "success" ]; then
+            echo "::error::Play/Lite flavor isolation check did not succeed"
+            failed=1
+          fi
+          exit "$failed"

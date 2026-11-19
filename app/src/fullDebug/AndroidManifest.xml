@@ -3,6 +3,7 @@
     <application>
         <activity
             android:name=".spike.RootSpikeActivity"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|uiMode|density"
             android:exported="true"
             android:label="Root Telephony Spike"
             android:theme="@style/Theme.TrafficLight">

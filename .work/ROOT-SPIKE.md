@@ -83,7 +83,7 @@ sleep 5
 
 Dua jalur baca dipakai agar variasi API/transaction terlihat di evidence: `content query` ke provider `telephony/siminfo` (jalur kanonik, kolom `_id`, `sim_id`, `carrier_name`, `imsi`) dan `dumpsys isub` (jalur service dump). Sumber record dipilih deterministik: provider menang bila menghasilkan record, `isub` hanya dipakai bila provider kosong, sehingga satu subscription tidak pernah terhitung dua kali.
 
-Evidence ditulis ke `Download/traffic-light-root-spike.txt` sebagai teks biasa tanpa nilai IMSI, tanpa output mentah, dan tanpa string command. Nomor attempt ditulis pada setiap blok sehingga rangkaian grant, denial, revoke, dan retry dapat dibedakan.
+Pada API 29+, evidence ditulis ke `Download/traffic-light-root-spike-attempt-<N>.txt`; API 28 memakai direktori external-files aplikasi tanpa runtime permission. File berupa teks biasa tanpa nilai IMSI, tanpa output mentah, dan tanpa string command. Nomor attempt ada di nama file dan isi sehingga rangkaian grant, denial, revoke, dan retry tidak tertukar.
 
 ## Prosedur verifikasi perangkat
 
