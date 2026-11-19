@@ -1,5 +1,7 @@
 # PLAN — Advanced Access via Root
 
+> **Superseded** oleh `.work/PLAN_advanced_access_root_nfr04_scope_revision_20261119_115648.md` (revisi scope D-01, 2026-11-19). File ini disimpan sebagai history dan tetap memuat Log Executor WP-01 R1–R5 serta evidence perangkat.
+
 ## Context
 Traffic Light Full saat ini mengikat advanced multi-SIM tracking pada Shizuku. Delivery menambahkan backend Root berbasis libsu untuk compatible `su` (Magisk, KernelSU, KernelSU Next), mempertahankan Shizuku, dan memilih Root → Shizuku → Basic. Root hanya diminta dari aksi eksplisit pengguna.
 
@@ -19,8 +21,8 @@ FR-01–FR-10, NFR-01–NFR-06, dan SC-01–SC-07 dari `.work/PRD.md`.
 ---
 
 ## WP-01 — Spike akses telephony melalui root
-Status: qc
-QC: menunggu audit ulang; rework R1–R5 ditangani, evidence perangkat protocol v2 lengkap, dan full test suite lulus dua kali di CI run `44506300028`.
+Status: rework
+QC: FAIL (2026-11-19, commit `b0fabbf`). R1–R5 lama tertutup: harness, protocol v2, UID 0 dua SIM, deny/revoke/retry, 41 test, anti-ghost, isolasi flavor, dan full suite CI dua kali lulus. Blocker baru: coverage NFR-04/quality gate kontrak belum lengkap (Magisk, KernelSU, Shizuku-only, Basic, Android minimum). Lihat REWORK-R6–R8 di `.work/QC-WP-01.md`.
 
 File:
 - `.work/ROOT-SPIKE.md`
@@ -30,10 +32,10 @@ Dependensi:
 - Tidak ada
 
 Tugas:
-- [x] T-001 Dokumentasikan Android/perangkat target dan data telephony minimum (FR-03, NFR-04).
+- [ ] T-001 Dokumentasikan Android/perangkat target dan data telephony minimum (FR-03, NFR-04). — QC: dokumentasi ada, tetapi versi Android minimum konkret dan matrix aktual belum lengkap (REWORK-R6/R7).
 - [x] T-002 Uji libsu grant dan allowlisted command tanpa prompt saat initialization (FR-01, FR-02, SC-05).
 - [x] T-003 Buktikan subscription ID, slot, carrier, dan subscriber ID melalui UID root pada perangkat nyata (FR-03, SC-01).
-- [x] T-004 Catat variasi API/transaction, SELinux, exit code, timeout, dan protocol output tanpa data sensitif (NFR-01, NFR-02, NFR-04).
+- [ ] T-004 Catat variasi API/transaction, SELinux, exit code, timeout, dan protocol output tanpa data sensitif (NFR-01, NFR-02, NFR-04). — QC: tercatat lengkap untuk KernelSU Next/Android 16; variasi lintas root manager, Shizuku/Basic, dan Android minimum belum ada (REWORK-R6).
 - [x] T-005 Tetapkan GO/REWORK mekanisme produksi dan fallback (FR-05, NFR-03).
 
 Kriteria terima:

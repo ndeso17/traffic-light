@@ -2,17 +2,31 @@
 
 ## Keputusan
 
-**Device evidence lengkap; WP-01 diajukan ke QC.** Seluruh field domain berhasil dibaca sebagai UID 0 pada perangkat fisik multi-SIM (moto g57 power, Android 16 / SDK 36, KernelSU Next), dan jalur grant, denial, serta revoke/retry terbukti dari harness Full-only tanpa prompt saat startup. Full test suite repository lulus dua kali berturut-turut di CI run `44506300028`, sehingga REWORK-R4 tidak lagi menjadi blocker.
+**Device evidence lengkap untuk kombinasi yang diuji; WP-01 diajukan ulang ke QC.** Seluruh field domain berhasil dibaca sebagai UID 0 pada perangkat fisik multi-SIM (moto g57 power, Android 16 / SDK 36, KernelSU Next), dan jalur grant, denial, serta revoke/retry terbukti dari harness Full-only tanpa prompt saat startup.
 
-Dukungan Magisk, KernelSU, KernelSU Next versi lain, Android minimum, dan OEM lain tetap menjadi blocker release (WP-09).
+Cakupan yang **tidak** diklaim: Magisk, KernelSU, versi KernelSU Next lain, OEM lain, dan Android minimum (`minSdk 28`) belum diuji. Item tersebut adalah matrix NFR-04 di WP-09 dan tetap blocker release (Planner decision D-01, `.work/PLAN_advanced_access_root_nfr04_scope_revision_20261119_115648.md`). Dokumen ini tidak boleh dibaca sebagai klaim kompatibilitas universal.
+
+## Cakupan evidence (kombinasi teruji vs belum diuji)
+
+| Dimensi | Nilai teruji | Belum diuji |
+|---|---|---|
+| Perangkat | moto g57 power | OEM/model lain |
+| Android | 16 / SDK 36 | API 28 (`minSdk` aplikasi) sampai SDK 35 |
+| Root manager | KernelSU Next (default-unmount, versi tidak dicatat harness) | Magisk, KernelSU, versi KernelSU Next lain |
+| SELinux | Enforcing | Permissive/Disabled |
+| SIM | dua subscription aktif | konfigurasi single-SIM / eSIM-only |
+
+Verifikasi dimensi yang belum diuji adalah gate WP-09 (T-037–T-044), bukan bagian acceptance WP-01.
+
 
 ## Status per 2026-11-19
 
 | Item | Status | Bukti |
 |---|---|---|
+| T-001 target platform dan data minimum | PASS (dokumentasi) | Matrix target + status teruji/belum teruji di bawah; `minSdk 28` dicatat sebagai target, bukan hasil verifikasi |
 | T-002 no-prompt initialization, grant, denial | PASS | 8 attempt perangkat; `startupShellCached=false` dan `startupShellRequest=false` pada semuanya |
 | T-003 subscription ID/slot/carrier/subscriber via UID 0 | PASS | `shellStatus=root_uid_0`, 2 record aktif, `recordSource=provider` |
-| T-004 SELinux, exit code, timeout, protocol, redaksi | PASS | `selinux=Enforcing`, `command_failure`, `timeout`, protocol v2 |
+| T-004 SELinux, exit code, timeout, protocol, redaksi | PASS untuk kombinasi teruji | `selinux=Enforcing`, `command_failure`, `timeout`, protocol v2; variasi manager/Android lain = WP-09 |
 | Revoke/retry | PASS | attempt 7 grant → attempt 8 `non_root` dengan `shellCachedBefore=false` setelah grant dicabut di root manager |
 | `bash gradlew test` baseline | PASS | CI run `44506300028`, job `full-test-baseline`: dua run berturut-turut `success` |
 
@@ -44,15 +58,16 @@ Konsekuensi: jalur `isub` **tidak dipakai** untuk evidence mana pun (`recordSour
 
 ## Target dan data minimum (T-001)
 
-Matrix verifikasi minimum harus mencakup perangkat fisik multi-SIM pada:
+Matrix verifikasi minimum (target, dieksekusi di WP-09) harus mencakup perangkat fisik multi-SIM pada:
 
-| Dimensi | Target minimum |
-|---|---|
-| Android | Versi terendah yang didukung aplikasi dan sedikitnya satu versi Android terkini |
-| Root manager | Magisk, KernelSU, KernelSU Next (masing-masing versi dicatat) |
-| OEM / device | Model dan build fingerprint dicatat; hasil satu OEM tidak digeneralisasi |
-| SELinux | Mode dicatat tanpa mengubah enforcement |
-| SIM | Sedikitnya satu perangkat dengan dua subscription aktif |
+| Dimensi | Target minimum | Status pada WP-01 |
+|---|---|---|
+| Android | Versi terendah yang didukung aplikasi (`minSdk 28`) dan sedikitnya satu versi Android terkini | Android 16/SDK 36 teruji; API 28 **belum teruji** |
+| Root manager | Magisk, KernelSU, KernelSU Next (masing-masing versi dicatat) | KernelSU Next teruji; Magisk/KernelSU **belum teruji** |
+| OEM / device | Model dan build fingerprint dicatat; hasil satu OEM tidak digeneralisasi | moto g57 power teruji; OEM lain **belum teruji** |
+| SELinux | Mode dicatat tanpa mengubah enforcement | Enforcing teruji; mode lain **belum teruji** |
+| SIM | Sedikitnya satu perangkat dengan dua subscription aktif | Teruji (dua subscription) |
+
 
 Setiap subscription harus menghasilkan tepat empat field domain berikut:
 
@@ -187,7 +202,7 @@ Interpretasi:
 - Grant (attempt 2–3) berhasil: libsu melaporkan `ROOT_SHELL`, sehingga prompt dan grant terbukti terjadi **hanya** setelah aksi eksplisit tombol.
 - Anomali `lineCount=0` dengan `exitCode=0` bukan kegagalan grant, melainkan bug harness: libsu 6 tidak menampung output tanpa `Shell.Job.to(list)`. Sudah diperbaiki dan dikunci unit test (`RootSpikeShellRunnerTest`).
 - Attempt 3 memakai `shellCachedBefore=true` karena jalur `root_uid_not_zero` tidak menutup shell. Sudah diperbaiki: shell ditutup di semua jalur.
-- T-002/T-003 tetap belum lengkap: grant terbukti, tetapi UID root, SELinux, dan record SIM belum terbaca karena bug capture di atas.
+- Catatan historis: pada attempt 1–3 T-002/T-003 belum lengkap karena bug capture di atas; kondisi itu ditutup oleh evidence protocol v2 di bawah.
 
 ### Build terverifikasi (CI run `44438632587`, commit `1228363`)
 
@@ -263,14 +278,18 @@ Audit privasi atas file protocol v2: tidak ada nilai `_id`, IMSI/subscriber ID, 
 
 ## Syarat keluar REWORK
 
-Seluruh item REWORK-R1–R5 terpenuhi: matrix berisi evidence perangkat rooted multi-SIM yang membuktikan seluruh field, no-prompt saat initialization, prompt setelah aksi eksplisit, grant/denial/revoke/retry, exit-code/timeout/parser behavior, redaksi data sensitif, dan baseline full test suite yang lulus dua kali.
+REWORK-R1–R5 dan R8 terpenuhi: matrix berisi evidence perangkat rooted multi-SIM yang membuktikan seluruh field pada kombinasi yang diuji, no-prompt saat initialization, prompt setelah aksi eksplisit, grant/denial/revoke/retry, exit-code/timeout/parser behavior, redaksi data sensitif, baseline full test suite yang lulus dua kali, dan klaim kompatibilitas yang dibatasi pada kombinasi teruji.
+
+REWORK-R6/R7 diselesaikan oleh Planner decision D-01: verifikasi matrix perangkat NFR-04 (Magisk, KernelSU, KernelSU Next versi lain, Shizuku-only, Basic/no privilege, Android minimum API 28) menjadi gate WP-09/release, bukan acceptance WP-01. QC tidak memindahkan requirement itu sendiri; revisi dilakukan Planner secara eksplisit.
 
 Keputusan teknis: **GO untuk melanjutkan desain backend WP-03**, tetap fail-safe ke Shizuku → Basic. Ini bukan approval release. Dukungan Magisk, KernelSU, KernelSU Next versi lain, Android minimum, dan OEM lain tetap wajib di WP-09 sebagai blocker release.
 
 Known gaps yang diteruskan, bukan disembunyikan:
 
-- Parser `dumpsys isub` belum mengenali format Android 16; jalur ini tidak dipakai sebagai sumber record.
+- Parser `dumpsys isub` belum mengenali format Android 16 (94 baris, 0 record); jalur ini tidak dipakai sebagai sumber record dan tetap known gap untuk WP-09.
 - Satu nama carrier tidak lolos allowlist karakter evidence; tidak ada nilai carrier yang dicatat.
-- Coverage root manager/OEM tunggal.
+- Coverage root manager/OEM tunggal (KernelSU Next, moto g57 power).
+- Android minimum `minSdk 28` belum diverifikasi pada perangkat.
+- Shizuku-only dan Basic/no-privilege belum diverifikasi pada perangkat; keduanya gate WP-09.
 
 Catatan bukti historis: `Download/traffic-light-root-spike-attempt-1.txt` adalah file protocol v1 (02:28 UTC) dari build awal; isinya konsisten dengan denial protocol v2 tetapi superseded dan bukan bukti utama.
