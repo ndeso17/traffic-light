@@ -29,8 +29,8 @@ FR-01–FR-10, NFR-01–NFR-06, dan SC-01–SC-07 dari `.work/PRD.md`.
 ---
 
 ## WP-01 — Spike akses telephony melalui root (kombinasi teruji)
-Status: qc
-QC: FAIL (2026-11-19, commit `b0fabbf`). R1–R5 lama tertutup: harness, protocol v2, UID 0 dua SIM, deny/revoke/retry, 41 test, anti-ghost, isolasi flavor, dan full suite CI dua kali lulus. R6/R7 diselesaikan melalui D-01 (verifikasi matrix NFR-04 pindah ke WP-09). R8 ditutup oleh T-042. WP diajukan ulang ke QC. Lihat `.work/QC-WP-01.md` dan Log di bawah.
+Status: done
+QC: PASS_WITH_NOTES (2026-11-19 ronde 3, commit `f613dd7`). R1–R5, R6/R7 (via decision D-01: matrix NFR-04 → WP-09), dan R8 (klaim dipersempit) tertutup. Lihat `.work/QC-WP-01-r3.md`. Catatan terbuka: identitas/versi root manager wajib dicatat di WP-09 (T-038); dokumen kontrak `.work/` masih untracked.
 
 File:
 - `.work/ROOT-SPIKE.md`
@@ -58,7 +58,8 @@ Risiko:
 Mitigasi:
 - WP ini menjadi gerbang backend produksi; Shizuku/Basic tetap tersedia. Variasi lintas manager/OEM/Android dipindahkan ke matrix WP-09/D-01.
 
-### Log WP-01 (Executor)
+### Log WP-01 (Executor) — rework R6–R8 (scope D-01)
+
 Log R1–R5, evidence perangkat attempt 1–8, dan gate CI/handoff QC tersimpan di PLAN sebelumnya: `.work/PLAN_advanced_access_via_root_magisk_kernelsu_kernelsunext_20261118_170153.md`.
 
 Rework R6–R8 (scope D-01) — dokumentasi saja, tidak ada kode aplikasi/test yang diubah:
@@ -82,6 +83,33 @@ $ grep -rn "lengkap" .work/ROOT-SPIKE.md
 - `README.md` tidak memuat klaim kompatibilitas root, jadi tidak ada klaim universal di dokumentasi pengguna untuk diperbaiki.
 - Deviasi: tidak ada.
 - Risiko tersisa: matrix NFR-04 masih kosong sampai WP-09 memiliki perangkat Magisk/KernelSU/Shizuku-only/Basic/API 28; tetap blocker release, bukan blocker spike.
+
+### Log WP-01 (QC) — re-audit ronde 3
+
+Verdict: **PASS_WITH_NOTES** → WP-01 `qc → done` sebagai spike. Laporan: `.work/QC-WP-01-r3.md`.
+
+Gate yang dijalankan QC sendiri (bukan salinan Executor):
+
+```text
+$ bash gradlew :app:testFullDebugUnitTest --tests 'com.leekleak.trafficlight.spike.*' --rerun-tasks   # run 1
+BUILD SUCCESSFUL in 1m 27s
+$ bash gradlew :app:testFullDebugUnitTest --tests 'com.leekleak.trafficlight.spike.*' --rerun-tasks   # run 2
+BUILD SUCCESSFUL in 1m 18s   (83 actionable tasks: 83 executed)
+XML run 1 & 2: RootSpikeProtocolTest tests=40 failures=0 errors=0 skipped=0
+               RootSpikeShellRunnerTest tests=1 failures=0 errors=0 skipped=0
+
+$ git diff --stat 67cbc9b..HEAD -- app core .github gradle build.gradle.kts settings.gradle.kts
+(empty)  → kode identik dengan commit yang lulus full suite CI 44506300028
+
+$ grep -n "minSdk" app/build.gradle.kts → 31: minSdk = 28
+$ grep audit redaksi 19 file Download/traffic-light-root-spike-attempt-*.txt
+(no imsiValue=/subscriberIdValue=/carrierNameValue=/rawOutput=)
+$ git ls-files | forbidden patterns → none
+$ git diff --check → exit 0
+```
+
+Temuan yang diteruskan (bukan blocker WP-01): identitas/versi root manager belum ada di protocol evidence (wajib dicatat T-038/WP-09), dan dokumen kontrak `.work/` masih untracked (LOW).
+
 
 
 ---
@@ -355,10 +383,11 @@ Mitigasi:
 - UX/accessibility dan tidak ada startup superuser prompt.
 
 ## Blockers
-- WP-03 diblokir sampai WP-01 berstatus `done`.
-- Final acceptance diblokir sampai matrix perangkat WP-09 (T-037–T-043) memiliki evidence.
-- WP-09 membutuhkan perangkat fisik pengguna (Magisk, KernelSU, KernelSU Next, Shizuku-only, no-privilege, API 28); environment eksekusi tidak menyediakan ADB device.
+- WP-03 diblokir hanya oleh WP-02 (`todo`); gate WP-01 sudah `done` sebagai spike (QC PASS_WITH_NOTES, `.work/QC-WP-01-r3.md`).
+- Final acceptance diblokir sampai matrix perangkat WP-09 (T-037–T-044) memiliki evidence.
+- WP-09 membutuhkan perangkat fisik pengguna (Magisk, KernelSU, KernelSU Next, Shizuku-only, no-privilege, API 28); environment eksekusi tidak menyediakan ADB device. Root manager + versi wajib dicatat dari perangkat, bukan dari konteks (temuan QC MEDIUM).
 - Host test sebelumnya hang pada MockK/ByteBuddy external attach di `AppReviewManagerTest`; investigasi WP-08 dan jangan dianggap PASS.
+- Dokumen kontrak `.work/` (`AGENTS.md`, `PRD.md`, `Architecture.md`, `Design.md`, `Schema.md`, `Rules.md`, `INDEX.md`) masih untracked sehingga klon bersih tidak dapat memverifikasi kutipan sumber kebenaran; perlu keputusan manusia (LOW).
 
 ## Planner Notes
 - Revisi D-01 dijalankan atas permintaan manusia setelah QC menolak memindahkan requirement NFR-04 sendiri.
