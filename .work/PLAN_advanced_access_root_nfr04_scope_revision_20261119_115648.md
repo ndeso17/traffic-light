@@ -1,5 +1,7 @@
 # PLAN — Advanced Access via Root (revisi scope NFR-04)
 
+> **Superseded** oleh `.work/PLAN_advanced_access_root_checkpoint_after_wp08_20261119_170244.md` setelah checkpoint Planner wajib pasca WP-08. File ini dipertahankan sebagai history.
+
 ## Context
 Traffic Light Full saat ini mengikat advanced multi-SIM tracking pada Shizuku. Delivery menambahkan backend Root berbasis libsu untuk compatible `su` (Magisk, KernelSU, KernelSU Next), mempertahankan Shizuku, dan memilih Root → Shizuku → Basic. Root hanya diminta dari aksi eksplisit pengguna.
 
