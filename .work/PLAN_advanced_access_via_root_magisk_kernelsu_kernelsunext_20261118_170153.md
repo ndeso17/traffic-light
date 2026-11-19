@@ -19,7 +19,8 @@ FR-01–FR-10, NFR-01–NFR-06, dan SC-01–SC-07 dari `.work/PRD.md`.
 ---
 
 ## WP-01 — Spike akses telephony melalui root
-Status: qc
+Status: wip
+QC: FAIL — `.work/QC-WP-01.md`; T-002–T-004 belum terbukti pada perangkat, lihat REWORK-R1–R5.
 
 File:
 - `.work/ROOT-SPIKE.md`
@@ -71,6 +72,7 @@ List of devices attached
 
 ## WP-02 — Domain contract privileged access
 Status: todo
+QC: tidak diaudit (2026-11-18) — status masih `todo`, tidak ada Log Executor, file contract/test belum ada, dan dependency WP-01 belum `done`. Lihat `.work/QC-WP-01.md`.
 
 File:
 - `app/src/main/java/com/leekleak/trafficlight/integrations/PrivilegedAccess.kt`

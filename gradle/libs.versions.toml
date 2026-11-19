@@ -33,10 +33,12 @@ kotlinxCoroutinesTest = "1.11.0"
 turbine = "1.2.1"
 robolectric = "4.18"
 aboutLibraries = "15.3.0"
+libsu = "6.0.0"
 
 [libraries]
 
 # Base libraries
+libsu-core = { module = "com.github.topjohnwu.libsu:core", version.ref = "libsu" }
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 androidx-lifecycle-service = { group = "androidx.lifecycle", name = "lifecycle-service", version.ref = "lifecycle" }
 

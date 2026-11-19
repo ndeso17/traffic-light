@@ -22,7 +22,7 @@ on:
 jobs:
   build-full-debug:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 90
 
     steps:
       - name: Checkout repository
@@ -58,10 +58,35 @@ jobs:
             "cmake;4.1.2" \
             "ndk;30.0.16248370"
 
-      - name: Build Full Debug APK
+      - name: Unit test root spike protocol
         shell: bash
         run: |
           chmod +x gradlew
+          ./gradlew --no-daemon --max-workers=2 \
+            :app:testFullDebugUnitTest \
+            --tests "com.leekleak.trafficlight.spike.*" \
+            --stacktrace
+
+      - name: Prove Play and Lite do not carry libsu
+        shell: bash
+        run: |
+          set -euo pipefail
+          for flavor in play lite; do
+            echo "Checking ${flavor}DebugRuntimeClasspath for libsu"
+            ./gradlew --no-daemon --max-workers=2 \
+              :app:dependencies --configuration "${flavor}DebugRuntimeClasspath" \
+              > "/tmp/${flavor}-deps.txt"
+            if grep -qi "libsu\|topjohnwu" "/tmp/${flavor}-deps.txt"; then
+              echo "::error::${flavor} flavor resolves libsu/topjohnwu"
+              grep -i "libsu\|topjohnwu" "/tmp/${flavor}-deps.txt"
+              exit 1
+            fi
+            echo "${flavor}: no libsu dependency"
+          done
+
+      - name: Build Full Debug APK
+        shell: bash
+        run: |
           ./gradlew --no-daemon --max-workers=2 :app:assembleFullDebug --stacktrace
 
       - name: Upload Full Debug APK
@@ -70,4 +95,15 @@ jobs:
           name: trafficlight-full-debug-${{ github.sha }}
           path: app/build/outputs/apk/full/debug/*.apk
           if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-reports-${{ github.sha }}
+          path: |
+            app/build/reports/tests/**
+            app/build/test-results/**
+          if-no-files-found: ignore
           retention-days: 7

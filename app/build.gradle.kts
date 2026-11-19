@@ -166,6 +166,7 @@ dependencies {
     "fullImplementation"(project(":shizukuIntegration"))
 
     "fullImplementation"(project(":iperfIntegration"))
+    "fullDebugImplementation"(libs.libsu.core)
     "playImplementation"(project(":iperfIntegration"))
 
     implementation(libs.aboutlibraries.core)
