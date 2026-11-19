@@ -42,7 +42,7 @@ internal class RootPrivilegedBackend(
             return PrivilegedAccessOutcome.Failure(PrivilegedAccessError.AuthorizationDenied)
         }
 
-        val probe = session.run(RootCommand.UID, timeoutMs)
+        val probe = session.run(RootCommand.requireAllowlisted(RootCommand.UID), timeoutMs)
         return when {
             probe.timedOut -> PrivilegedAccessOutcome.Failure(PrivilegedAccessError.Timeout)
             probe.exitCode != 0 -> PrivilegedAccessOutcome.Failure(PrivilegedAccessError.CommandFailed)
@@ -63,7 +63,10 @@ internal class RootPrivilegedBackend(
             return PrivilegedAccessOutcome.Failure(PrivilegedAccessError.AuthorizationRevoked)
         }
 
-        val probe = session.run(RootCommand.SUBSCRIPTIONS, timeoutMs)
+        val probe = session.run(
+            RootCommand.requireAllowlisted(RootCommand.SUBSCRIPTIONS),
+            timeoutMs,
+        )
         if (probe.timedOut) {
             return PrivilegedAccessOutcome.Failure(PrivilegedAccessError.Timeout)
         }

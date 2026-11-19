@@ -111,7 +111,13 @@ jobs:
                 grep -i "libsu\|topjohnwu" "/tmp/${flavor}-deps.txt"
                 exit 1
               fi
-              echo "${flavor}: no libsu dependency"
+              apk=$(ls "app/build/outputs/apk/${flavor}/debug/"*.apk | head -1)
+              unzip -p "$apk" 'classes*.dex' > "/tmp/${flavor}-classes.dex"
+              if strings "/tmp/${flavor}-classes.dex" | grep -qE 'RootPrivilegedBackend|com/topjohnwu/superuser|RootCommand'; then
+                echo "${flavor}: root execution symbol found in APK"
+                exit 1
+              fi
+              echo "${flavor}: no libsu dependency or root execution symbol"
             done
           } 2>&1 | tee /tmp/flavor-isolation.log
 

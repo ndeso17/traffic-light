@@ -2,6 +2,7 @@ package com.leekleak.trafficlight.integrations
 
 import com.leekleak.trafficlight.database.AppPreferenceRepo
 import com.leekleak.trafficlight.model.DataPlanManager
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -84,7 +85,7 @@ class PrivilegedAccessProviderImpl(
                 val authorization = if (authorizationOf(backend) == BackendAuthorization.Granted) {
                     BackendAuthorization.Granted
                 } else {
-                    runCatching { backend.requestAuthorization() }
+                    runSuspendCatching { backend.requestAuthorization() }
                         .getOrDefault(BackendAuthorization.Denied)
                 }
 
@@ -94,7 +95,7 @@ class PrivilegedAccessProviderImpl(
                     continue
                 }
 
-                when (val outcome = runCatching { backend.enable() }
+                when (val outcome = runSuspendCatching { backend.enable() }
                     .getOrElse { PrivilegedAccessOutcome.Failure(PrivilegedAccessError.Unknown) }) {
                     is PrivilegedAccessOutcome.Success -> {
                         val error = syncFrom(backend)
@@ -126,7 +127,7 @@ class PrivilegedAccessProviderImpl(
 
     override suspend fun stop() {
         mutex.withLock {
-            privileged.forEach { backend -> runCatching { backend.disable() } }
+            privileged.forEach { backend -> runSuspendCatching { backend.disable() } }
             appPreferenceRepo.setAdvancedAccessEnabled(false)
             denied.clear()
             _state.value = PrivilegedAccessState.Disabled
@@ -150,7 +151,7 @@ class PrivilegedAccessProviderImpl(
             for (candidate in privileged) {
                 if (candidate.kind == kind || candidate.kind in denied) continue
                 if (authorizationOf(candidate) != BackendAuthorization.Granted) continue
-                val enabledCandidate = runCatching { candidate.enable() }
+                val enabledCandidate = runSuspendCatching { candidate.enable() }
                     .getOrElse { PrivilegedAccessOutcome.Failure(PrivilegedAccessError.Unknown) }
                 if (enabledCandidate is PrivilegedAccessOutcome.Success && syncFrom(candidate) == null) {
                     _state.value = PrivilegedAccessState.Active(candidate.kind)
@@ -172,7 +173,7 @@ class PrivilegedAccessProviderImpl(
 
             when (authorizationOf(backend)) {
                 BackendAuthorization.Granted -> {
-                    val outcome = runCatching { backend.enable() }
+                    val outcome = runSuspendCatching { backend.enable() }
                         .getOrElse { PrivilegedAccessOutcome.Failure(PrivilegedAccessError.Unknown) }
                     if (outcome is PrivilegedAccessOutcome.Success) {
                         val error = syncFrom(backend)
@@ -199,14 +200,16 @@ class PrivilegedAccessProviderImpl(
     }
 
     private suspend fun availabilityOf(backend: PrivilegedBackend): BackendAvailability =
-        runCatching { backend.availability() }.getOrDefault(BackendAvailability.Unknown)
+        runSuspendCatching { backend.availability() }
+            .getOrDefault(BackendAvailability.Unknown)
 
     private suspend fun authorizationOf(backend: PrivilegedBackend): BackendAuthorization =
-        runCatching { backend.authorization() }.getOrDefault(BackendAuthorization.Unknown)
+        runSuspendCatching { backend.authorization() }
+            .getOrDefault(BackendAuthorization.Unknown)
 
-    /** Returns null on success, or the failure category. Never throws. */
+    /** Returns null on success, or the failure category. Never throws except cancellation. */
     private suspend fun syncFrom(backend: PrivilegedBackend): PrivilegedAccessError? {
-        val outcome = runCatching { backend.readSubscriptions() }
+        val outcome = runSuspendCatching { backend.readSubscriptions() }
             .getOrElse { return PrivilegedAccessError.Unknown }
         return when (outcome) {
             is PrivilegedAccessOutcome.Success -> {
@@ -243,6 +246,15 @@ class PrivilegedAccessProviderImpl(
     }
 
     private suspend fun syncBasic() {
-        runCatching { updateSimDataBasic(dataPlanManager) }
+        runSuspendCatching { updateSimDataBasic(dataPlanManager) }
+    }
+
+    /** Never turn cooperative coroutine cancellation into a backend failure/fallback loop. */
+    private suspend inline fun <T> runSuspendCatching(block: () -> T): Result<T> = try {
+        Result.success(block())
+    } catch (cancellation: CancellationException) {
+        throw cancellation
+    } catch (throwable: Throwable) {
+        Result.failure(throwable)
     }
 }
