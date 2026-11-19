@@ -109,9 +109,9 @@ aboutLibraries {
 // "fullDebugImplementation" dependency cannot be declared in the dependencies block below.
 // The dependency is therefore added lazily to the single Full Debug variant, which keeps
 // Full Release, Play and Lite free of libsu.
-configurations.configureEach { configuration: org.gradle.api.artifacts.Configuration ->
-    if (configuration.name == "fullDebugImplementation") {
-        configuration.dependencies.add(project.dependencies.create(libs.libsu.core.get()))
+configurations.configureEach {
+    if (this.name == "fullDebugImplementation") {
+        this.dependencies.add(project.dependencies.create(libs.libsu.core.get()))
     }
 }
 
