@@ -271,7 +271,19 @@ class RootSpikeActivity : Activity() {
         shellStatusInt = shellStatusInt,
         authorizationRequestedByExplicitAction = true,
         shellCachedBefore = shellCachedBefore,
+        suVisibleToApp = suVisibleToApp(),
     )
+
+    /**
+     * Diagnostic only. A false value is expected on KernelSU Next with default unmount and
+     * must never be treated as "device is not rooted" or as an availability decision.
+     */
+    private fun suVisibleToApp(): Boolean {
+        val path = System.getenv("PATH") ?: return false
+        return path.split(':').any { entry ->
+            entry.isNotBlank() && java.io.File(entry, "su").canExecute()
+        }
+    }
 
     private fun failureEvidence(category: String): String = RootSpikeEvidence.format(
         attempt = attempt,

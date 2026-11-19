@@ -58,14 +58,52 @@ jobs:
             "cmake;4.1.2" \
             "ndk;30.0.16248370"
 
+      - name: Build Full Debug APK
+        shell: bash
+        run: |
+          set -o pipefail
+          ./gradlew --no-daemon --max-workers=2 \
+            :app:assembleFullDebug --stacktrace 2>&1 | tee /tmp/assemble-full-debug.log
+
+      - name: Upload Full Debug APK
+        uses: actions/upload-artifact@v7
+        with:
+          name: trafficlight-full-debug-${{ github.sha }}
+          path: app/build/outputs/apk/full/debug/*.apk
+          if-no-files-found: error
+          retention-days: 7
+
       - name: Unit test root spike protocol
         shell: bash
         run: |
-          chmod +x gradlew
+          set -o pipefail
           ./gradlew --no-daemon --max-workers=2 \
             :app:testFullDebugUnitTest \
             --tests "com.leekleak.trafficlight.spike.*" \
-            --stacktrace
+            --stacktrace 2>&1 | tee /tmp/spike-unit-test.log
+
+      - name: Diagnose unit test failure
+        if: failure()
+        shell: bash
+        run: |
+          set +e
+          if [ ! -f /tmp/spike-unit-test.log ]; then
+            echo "::error::unit test log missing"
+            exit 0
+          fi
+          {
+            echo "### Unit test failure diagnostics"
+            echo '```text'
+            grep -n -E "FAILURE:|BUILD FAILED|What went wrong|Execution failed for task|Could not (resolve|find)|error:|e: |Caused by:|Task .* not found|No tests found" \
+              /tmp/spike-unit-test.log | head -40
+            echo '```'
+          } | tee /tmp/diag.txt
+          cat /tmp/diag.txt >> "$GITHUB_STEP_SUMMARY"
+          grep -E "FAILURE:|BUILD FAILED|What went wrong|Execution failed for task|Could not (resolve|find)|Task .* not found|No tests found" \
+            /tmp/spike-unit-test.log | head -8 | sed -e 's/%/%25/g' -e 's/\r/%0D/g' | while IFS= read -r line; do
+            echo "::error::${line}"
+          done
+          exit 0
 
       - name: Prove Play and Lite do not carry libsu
         shell: bash
@@ -83,19 +121,6 @@ jobs:
             fi
             echo "${flavor}: no libsu dependency"
           done
-
-      - name: Build Full Debug APK
-        shell: bash
-        run: |
-          ./gradlew --no-daemon --max-workers=2 :app:assembleFullDebug --stacktrace
-
-      - name: Upload Full Debug APK
-        uses: actions/upload-artifact@v7
-        with:
-          name: trafficlight-full-debug-${{ github.sha }}
-          path: app/build/outputs/apk/full/debug/*.apk
-          if-no-files-found: error
-          retention-days: 7
 
       - name: Upload test reports
         if: always()

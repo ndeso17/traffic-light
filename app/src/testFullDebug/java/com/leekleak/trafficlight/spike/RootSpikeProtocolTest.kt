@@ -243,6 +243,11 @@ class RootSpikeProtocolTest {
     }
 
     @Test
+    fun `evidence records su visibility as a diagnostic only`() {
+        assertTrue(evidence().contains("suVisibleToApp=false"))
+    }
+
+    @Test
     fun `carrier name with suspicious characters is not marked safe`() {
         val records = RootSpikeProtocol.parseContentQuery(
             listOf("Row: 0 _id=1, sim_id=0, carrier_name=510011234567890/../x"),
@@ -301,6 +306,7 @@ class RootSpikeProtocolTest {
         shellStatusInt = 2,
         authorizationRequestedByExplicitAction = true,
         shellCachedBefore = false,
+        suVisibleToApp = false,
     )
 
     private fun testProbe() = SpikeProbeResult(

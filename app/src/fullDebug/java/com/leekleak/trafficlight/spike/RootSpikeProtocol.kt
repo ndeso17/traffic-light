@@ -18,6 +18,7 @@ internal data class SpikeDeviceInfo(
     val shellStatusInt: Int,
     val authorizationRequestedByExplicitAction: Boolean,
     val shellCachedBefore: Boolean,
+    val suVisibleToApp: Boolean,
 )
 
 internal data class SpikeProbeResult(
@@ -156,6 +157,7 @@ internal object RootSpikeEvidence {
         appendLine("startupShellRequest=false")
         appendLine("authorizationRequestedByExplicitAction=${device.authorizationRequestedByExplicitAction}")
         appendLine("shellCachedBefore=${device.shellCachedBefore}")
+        appendLine("suVisibleToApp=${device.suVisibleToApp}")
         appendLine("shellStatus=${device.shellStatus}")
         appendLine("shellStatusInt=${device.shellStatusInt}")
         appendLine("libsuGrantState=${device.libsuGrantState}")
