@@ -25,6 +25,7 @@ import com.leekleak.trafficlight.database.UsageQuery
 import com.leekleak.trafficlight.model.AppManager
 import com.leekleak.trafficlight.model.NetworkUsageManager
 import com.leekleak.trafficlight.model.PermissionManager
+import com.leekleak.trafficlight.integrations.PrivilegedAccessState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -59,15 +60,14 @@ data class HistoryUiState(
     val forceHourList: Boolean = false,
     val appList: List<AppUsage> = emptyList(),
     val hourList: List<HourUsage> = emptyList(),
-    val shizukuPermissionGranted: Boolean = false,
-    val shizukuRunning: Boolean = false,
+    val advancedAccess: PrivilegedAccessState = PrivilegedAccessState.Disabled,
     val timespanStartDate: LocalDate = LocalDate.now().plusDays(1).minusDays(MAX_DAYS.toLong()),
 ) {
     val queries: Pair<UsageQuery, UsageQuery>
         get() = query1 to query2
 
     val showShizukuNotRunning: Boolean
-        get() = BuildConfig.SHIZUKU && shizukuPermissionGranted && !shizukuRunning
+        get() = BuildConfig.SHIZUKU && advancedAccess is PrivilegedAccessState.Error
 }
 
 class HistoryVM(
@@ -95,8 +95,7 @@ class HistoryVM(
         val savedQuery2 by prefs.query2.collectAsState(UsageQuery(DataType.Wifi))
         val savedListParam by prefs.listParam.collectAsState(ListParam.AppList)
 
-        val shizukuPermissionGranted by permissionManager.shizukuPermissionGranted.collectAsState()
-        val shizukuRunning by permissionManager.shizukuRunning.collectAsState()
+        val advancedAccess by permissionManager.advancedAccessState.collectAsState()
 
         val usage by produceState(
             initialValue = List(MAX_DAYS) { ScrollableBarData(LocalDate.MIN) },
@@ -147,8 +146,7 @@ class HistoryVM(
             forceHourList = current.forceHourList,
             appList = appList,
             hourList = hourList,
-            shizukuPermissionGranted = shizukuPermissionGranted,
-            shizukuRunning = shizukuRunning,
+            advancedAccess = advancedAccess,
             timespanStartDate = getDatesForTimespan().first,
         )
     }

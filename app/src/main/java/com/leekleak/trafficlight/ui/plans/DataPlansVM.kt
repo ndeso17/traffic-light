@@ -8,6 +8,8 @@ import com.leekleak.trafficlight.charts.ActivityDay
 import com.leekleak.trafficlight.database.AppUsage
 import com.leekleak.trafficlight.database.DataPlan
 import com.leekleak.trafficlight.database.DataPlanSnapshot
+import com.leekleak.trafficlight.integrations.PrivilegedAccessState
+import com.leekleak.trafficlight.integrations.PrivilegedBackendKind
 import com.leekleak.trafficlight.model.DataPlanManager
 import com.leekleak.trafficlight.model.PermissionManager
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -29,14 +31,25 @@ data class DataPlansUiState(
     val remainingDailyBudget: Long = 0,
     val activityUsage: List<ActivityDay>? = null,
     val topApps: List<AppUsage>? = null,
-    val shizukuPermissionGranted: Boolean = false,
-    val shizukuRunning: Boolean = false,
+    val advancedAccess: PrivilegedAccessState = PrivilegedAccessState.Disabled,
 ) {
-    val showShizukuHint: Boolean
-        get() = BuildConfig.SHIZUKU && !shizukuPermissionGranted
+    /** Full only: offer the explicit action while no privileged backend is active. */
+    val showAdvancedAccessHint: Boolean
+        get() = BuildConfig.SHIZUKU && when (advancedAccess) {
+            is PrivilegedAccessState.Active -> advancedAccess.kind == PrivilegedBackendKind.Basic
+            is PrivilegedAccessState.Disabled,
+            is PrivilegedAccessState.AuthorizationRequired,
+            is PrivilegedAccessState.Error -> true
+            else -> false
+        }
 
-    val showShizukuNotRunning: Boolean
-        get() = BuildConfig.SHIZUKU && shizukuPermissionGranted && !shizukuRunning
+    /** Backend is known to be broken; Basic keeps working meanwhile. */
+    val showBackendStopped: Boolean
+        get() = advancedAccess is PrivilegedAccessState.Error ||
+            advancedAccess is PrivilegedAccessState.Unavailable
+
+    val activeBackend: PrivilegedBackendKind?
+        get() = (advancedAccess as? PrivilegedAccessState.Active)?.kind
 }
 
 class DataPlansVM(
@@ -134,8 +147,7 @@ class DataPlansVM(
         remainingDailyBudgetFlow,
         activityUsageFlow,
         topAppsFlow,
-        permissionManager.shizukuPermissionGranted,
-        permissionManager.shizukuRunning
+        permissionManager.advancedAccessState
     ) { flows ->
         val activePlans = flows[0] as List<DataPlan>
         val snapshotsByHash = flows[1] as Map<String, DataPlanSnapshot>
@@ -147,8 +159,7 @@ class DataPlansVM(
         val remaining = flows[6] as Long? ?: 0L
         val activityUsage = flows[7] as List<ActivityDay>?
         val apps = flows[8] as List<AppUsage>?
-        val shizukuPermissionGranted = flows[9] as Boolean
-        val shizukuRunning = flows[10] as Boolean
+        val advancedAccess = flows[9] as PrivilegedAccessState
 
         DataPlansUiState(
             activePlans = activePlans,
@@ -160,10 +171,9 @@ class DataPlansVM(
             remainingDailyBudget = remaining,
             activityUsage = activityUsage,
             topApps = apps,
-            shizukuPermissionGranted = shizukuPermissionGranted,
-            shizukuRunning = shizukuRunning
+            advancedAccess = advancedAccess
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), DataPlansUiState())
 
-    fun grantShizuku() = permissionManager.requestShizukuPermission()
+    fun requestAdvancedAccess() = permissionManager.requestAdvancedAccess()
 }

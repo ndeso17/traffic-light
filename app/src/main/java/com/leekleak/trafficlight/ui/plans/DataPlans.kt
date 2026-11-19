@@ -83,6 +83,8 @@ import com.leekleak.trafficlight.charts.ExtraGraph
 import com.leekleak.trafficlight.database.AppUsage
 import com.leekleak.trafficlight.database.DataPlan
 import com.leekleak.trafficlight.database.DataPlanSnapshot
+import com.leekleak.trafficlight.integrations.PrivilegedAccessState
+import com.leekleak.trafficlight.integrations.PrivilegedBackendKind
 import kotlinx.coroutines.launch
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
@@ -92,7 +94,7 @@ fun DataPlans(
     uiState: DataPlansUiState,
     initialPlanHash: String?,
     selectDataPlan: (DataPlan?) -> Unit,
-    grantShizuku: () -> Unit,
+    requestAdvancedAccess: () -> Unit,
     goToPlanConfig: (DataPlan) -> Unit,
     refresh: () -> Unit,
 ) {
@@ -120,7 +122,7 @@ fun DataPlans(
         backAction = BackAction.None,
         extraPadding = LocalNavigationBarPadding.current,
         actions = {
-            if (uiState.showShizukuNotRunning) ShizukuStoppedTag()
+            if (uiState.showBackendStopped) ShizukuStoppedTag()
         },
     ) { paddingValues ->
         if (isWidescreen) {
@@ -128,7 +130,7 @@ fun DataPlans(
                 paddingValues = paddingValues,
                 uiState = uiState,
                 selectDataPlan = selectDataPlan,
-                grantShizuku = grantShizuku,
+                requestAdvancedAccess = requestAdvancedAccess,
                 goToPlanConfig = goToPlanConfig,
             )
         } else {
@@ -137,7 +139,7 @@ fun DataPlans(
                 initialPlanHash = initialPlanHash,
                 uiState = uiState,
                 selectDataPlan = selectDataPlan,
-                grantShizuku = grantShizuku,
+                requestAdvancedAccess = requestAdvancedAccess,
                 goToPlanConfig = goToPlanConfig,
             )
         }
@@ -150,7 +152,7 @@ private fun DataPlansSinglePane(
     initialPlanHash: String?,
     uiState: DataPlansUiState,
     selectDataPlan: (DataPlan?) -> Unit,
-    grantShizuku: () -> Unit,
+    requestAdvancedAccess: () -> Unit,
     goToPlanConfig: (DataPlan) -> Unit,
 ) {
     val layoutDirection = LocalLayoutDirection.current
@@ -159,14 +161,14 @@ private fun DataPlansSinglePane(
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Spacer(Modifier.height(paddingValues.calculateTopPadding()))
-        if (uiState.activePlans.isNotEmpty() || uiState.showShizukuHint) {
+        if (uiState.activePlans.isNotEmpty() || uiState.showAdvancedAccessHint) {
             DataPlanPager(
                 initialPlanHash = initialPlanHash,
                 startPadding = paddingValues.calculateStartPadding(layoutDirection) + 8.dp,
                 endPadding = paddingValues.calculateEndPadding(layoutDirection) + 8.dp,
                 uiState = uiState,
                 selectDataPlan = selectDataPlan,
-                grantShizuku = grantShizuku
+                requestAdvancedAccess = requestAdvancedAccess
             )
         }
         DataPlanInsights(
@@ -182,7 +184,7 @@ private fun DataPlansTwoPane(
     paddingValues: PaddingValues,
     uiState: DataPlansUiState,
     selectDataPlan: (DataPlan?) -> Unit,
-    grantShizuku: () -> Unit,
+    requestAdvancedAccess: () -> Unit,
     goToPlanConfig: (DataPlan) -> Unit,
 ) {
     val layoutDirection = LocalLayoutDirection.current
@@ -215,11 +217,11 @@ private fun DataPlansTwoPane(
                     ) { selectDataPlan(plan) }
                 }
             }
-            if (uiState.showShizukuHint) {
+            if (uiState.showAdvancedAccessHint) {
                 item(key = "shizuku_hint") {
-                    ShizukuHintCard(
-                        onGrant = grantShizuku,
-                        shizukuRunning = uiState.shizukuRunning,
+                    AdvancedAccessCard(
+                        advancedAccess = uiState.advancedAccess,
+                        onRequest = requestAdvancedAccess,
                         modifier = Modifier.animateItem()
                     )
                 }
@@ -250,7 +252,7 @@ private fun DataPlanPager(
     endPadding: Dp,
     uiState: DataPlansUiState,
     selectDataPlan: (DataPlan?) -> Unit,
-    grantShizuku: () -> Unit,
+    requestAdvancedAccess: () -> Unit,
 ) {
     val scope = rememberCoroutineScope()
 
@@ -259,7 +261,7 @@ private fun DataPlanPager(
         .takeIf { it >= 0 }
         ?: activePlans.indexOf(uiState.selectedPlan).coerceAtLeast(0)
 
-    val pageCount = activePlans.size + if (uiState.showShizukuHint) 1 else 0
+    val pageCount = activePlans.size + if (uiState.showAdvancedAccessHint) 1 else 0
     val pagerState = rememberPagerState(initialPage = initialPage, pageCount = { pageCount })
     
     LaunchedEffect(pagerState.settledPage) {
@@ -298,20 +300,35 @@ private fun DataPlanPager(
                 scope.launch { pagerState.animateScrollToPage(page) }
             }
         } else {
-            ShizukuHintCard(
-                onGrant = grantShizuku,
-                shizukuRunning = uiState.shizukuRunning
+            AdvancedAccessCard(
+                advancedAccess = uiState.advancedAccess,
+                onRequest = requestAdvancedAccess
             )
         }
     }
 }
 
 @Composable
-private fun ShizukuHintCard(
-    onGrant: () -> Unit,
-    shizukuRunning: Boolean,
+private fun AdvancedAccessCard(
+    advancedAccess: PrivilegedAccessState,
+    onRequest: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val status = when (advancedAccess) {
+        is PrivilegedAccessState.Active -> when (advancedAccess.kind) {
+            PrivilegedBackendKind.Root -> R.string.advanced_access_root_active
+            PrivilegedBackendKind.Shizuku -> R.string.advanced_access_shizuku_active
+            PrivilegedBackendKind.Basic -> R.string.advanced_access_basic
+        }
+        is PrivilegedAccessState.AuthorizationRequired -> R.string.advanced_access_authorization_required
+        is PrivilegedAccessState.Enabling, PrivilegedAccessState.Detecting -> R.string.advanced_access_enabling
+        is PrivilegedAccessState.Error -> R.string.advanced_access_error
+        PrivilegedAccessState.Unavailable -> R.string.advanced_access_unavailable
+        PrivilegedAccessState.Disabled -> R.string.advanced_access_basic
+    }
+    val busy = advancedAccess is PrivilegedAccessState.Enabling ||
+        advancedAccess is PrivilegedAccessState.Detecting
+
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -328,33 +345,31 @@ private fun ShizukuHintCard(
             tint = colorScheme.secondary
         )
         Text(
-            text = stringResource(R.string.track_multiple_sim_cards),
+            text = stringResource(R.string.advanced_access),
             color = colorScheme.secondary,
             fontWeight = FontWeight.Bold,
             textAlign = TextAlign.Center
         )
         Text(
-            text = stringResource(R.string.shizuku_permission_required),
+            text = stringResource(status),
             color = colorScheme.secondary,
             textAlign = TextAlign.Center
         )
-        if (!shizukuRunning) {
-            Text(
-                text = stringResource(R.string.shizuku_stopped),
-                color = colorScheme.secondary,
-                textAlign = TextAlign.Center
-            )
-        }
+        Text(
+            text = stringResource(R.string.advanced_access_rationale),
+            color = colorScheme.secondary,
+            textAlign = TextAlign.Center
+        )
         Button(
             colors = ButtonDefaults.buttonColors(
                 containerColor = colorScheme.secondary,
                 contentColor = colorScheme.onSecondary
             ),
             shape = MaterialTheme.shapes.large,
-            enabled = shizukuRunning,
-            onClick = onGrant
+            enabled = !busy,
+            onClick = onRequest
         ) {
-            Text(stringResource(R.string.grant))
+            Text(stringResource(R.string.enable_advanced_access))
         }
     }
 }

@@ -6,7 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.leekleak.trafficlight.database.AppPreferenceRepo
 import com.leekleak.trafficlight.database.DataPlan
 import com.leekleak.trafficlight.database.TimeInterval
-import com.leekleak.trafficlight.integrations.ShizukuServicesProvider
+import com.leekleak.trafficlight.integrations.PrivilegedAccessProvider
 import com.leekleak.trafficlight.model.AppManager
 import com.leekleak.trafficlight.model.DataPlanManager
 import com.leekleak.trafficlight.model.DataUIDApp
@@ -41,7 +41,7 @@ class DataPlanConfigVM (
     val appManager: AppManager,
     val dataPlanManager: DataPlanManager,
     val appPreferenceRepo: AppPreferenceRepo,
-    val shizukuServicesProvider: ShizukuServicesProvider,
+    val privilegedAccessProvider: PrivilegedAccessProvider,
     permissionManager: PermissionManager,
     @InjectedParam initialPlan: DataPlan,
 ): ViewModel() {
@@ -115,14 +115,14 @@ class DataPlanConfigVM (
     fun delete() {
         viewModelScope.launch(Dispatchers.IO) {
             dataPlanManager.deletePlan(newPlan.value.hashedSubscriberID)
-            shizukuServicesProvider.updateSimData()
+            privilegedAccessProvider.syncSubscriptions()
         }
     }
 
     fun save() {
         viewModelScope.launch(Dispatchers.IO) {
             dataPlanManager.saveConfiguredPlan(newPlan.value)
-            shizukuServicesProvider.updateSimData()
+            privilegedAccessProvider.syncSubscriptions()
         }
     }
 

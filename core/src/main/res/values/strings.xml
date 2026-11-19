@@ -9,6 +9,16 @@
     <string name="wifi">Wi-Fi</string>
     <string name="cellular">Cellular</string>
     <string name="grant">Grant</string>
+    <string name="advanced_access">Advanced access</string>
+    <string name="enable_advanced_access">Enable advanced access</string>
+    <string name="advanced_access_rationale">Compatible privileged access is used locally to read SIM information for multi-SIM tracking. This data is not sent anywhere.</string>
+    <string name="advanced_access_root_active">Advanced access via Root</string>
+    <string name="advanced_access_shizuku_active">Advanced access via Shizuku</string>
+    <string name="advanced_access_basic">Basic mode is active</string>
+    <string name="advanced_access_authorization_required">Authorization is required. You can retry or continue in Basic mode.</string>
+    <string name="advanced_access_enabling">Enabling advanced access…</string>
+    <string name="advanced_access_error">Advanced access stopped. Basic mode remains available.</string>
+    <string name="advanced_access_unavailable">No compatible privileged backend is available. Basic mode remains available.</string>
     <string name="settings">Settings</string>
     <string name="battery_optimization">Battery optimization</string>
     <string name="battery_optimization_description">Ensure system doesn\'t stop service</string>

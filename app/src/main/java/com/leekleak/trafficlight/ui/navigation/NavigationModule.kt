@@ -49,7 +49,7 @@ val navigationModule = module {
             uiState = uiState,
             initialPlanHash = key.selectedPlanHash,
             selectDataPlan = viewModel::selectDataPlan,
-            grantShizuku = viewModel::grantShizuku,
+            requestAdvancedAccess = viewModel::requestAdvancedAccess,
             goToPlanConfig = { plan -> navigator.goTo(PlanConfigKey(plan)) },
             refresh = viewModel::refresh
         )
