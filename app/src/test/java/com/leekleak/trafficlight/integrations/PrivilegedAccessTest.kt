@@ -156,11 +156,12 @@ class PrivilegedAccessTest {
 
         assertEquals(errors.size, errors.toSet().size)
         errors.forEach { error ->
-            // Kotlin object instances have only the compiler-generated INSTANCE singleton; no
-            // String/Throwable/record payload can be smuggled into a log or UI error.
-            val payloadFields = error::class.java.declaredFields
-                .filterNot { field -> field.name == "INSTANCE" }
-            assertTrue("unexpected payload on $error", payloadFields.isEmpty())
+            // All categories are singleton objects, not data classes carrying commands,
+            // identifiers, raw output, or Throwables. Identity proves there is no per-error
+            // runtime payload; compiler-generated metadata fields are intentionally ignored.
+            val singleton = error::class.objectInstance
+            assertTrue("error must be a payload-free singleton: $error", singleton === error)
+            assertFalse(error.toString().contains("="))
         }
     }
 
