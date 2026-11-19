@@ -314,6 +314,7 @@ class RootSpikeProtocolTest {
         exitCode = 0,
         timedOut = false,
         lineCount = 2,
+        stderrLineCount = 0,
         recordCount = 2,
         category = "success",
     )

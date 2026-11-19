@@ -139,6 +139,7 @@ jobs:
             for symbol in \
               "Lcom/leekleak/trafficlight/spike/RootSpikeActivity;" \
               "Lcom/leekleak/trafficlight/spike/RootSpikeProtocol;" \
+              "Lcom/leekleak/trafficlight/spike/RootSpikeShellRunner;" \
               "Lcom/topjohnwu/superuser/Shell;"; do
               if ! strings /tmp/full-debug-classes.dex | grep -qF "$symbol"; then
                 echo "symbol missing from dex: $symbol"

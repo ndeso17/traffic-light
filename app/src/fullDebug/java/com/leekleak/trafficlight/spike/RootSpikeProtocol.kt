@@ -26,6 +26,7 @@ internal data class SpikeProbeResult(
     val exitCode: Int,
     val timedOut: Boolean,
     val lineCount: Int,
+    val stderrLineCount: Int,
     val recordCount: Int,
     val category: String,
 )
@@ -171,6 +172,7 @@ internal object RootSpikeEvidence {
             appendLine("probe[${probe.id}].exitCode=${probe.exitCode}")
             appendLine("probe[${probe.id}].timedOut=${probe.timedOut}")
             appendLine("probe[${probe.id}].lineCount=${probe.lineCount}")
+            appendLine("probe[${probe.id}].stderrLineCount=${probe.stderrLineCount}")
             appendLine("probe[${probe.id}].recordCount=${probe.recordCount}")
         }
         appendLine("providerRecordCount=$providerRecordCount")

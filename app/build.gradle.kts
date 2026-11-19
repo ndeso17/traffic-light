@@ -110,7 +110,9 @@ aboutLibraries {
 // The dependency is therefore added lazily to the single Full Debug variant, which keeps
 // Full Release, Play and Lite free of libsu.
 configurations.configureEach {
-    if (this.name == "fullDebugImplementation") {
+    if (this.name in setOf("fullDebugImplementation", "testFullDebugImplementation")) {
+        // The spike unit tests fake the libsu job contract, so libsu must also be on
+        // the Full Debug unit-test classpath. Neither configuration reaches release/play/lite.
         this.dependencies.add(project.dependencies.create(libs.libsu.core.get()))
     }
 }

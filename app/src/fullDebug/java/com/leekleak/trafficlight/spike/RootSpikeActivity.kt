@@ -122,10 +122,20 @@ class RootSpikeActivity : Activity() {
             )
         }
 
+        try {
+            return runProbes(shell, shellBefore)
+        } finally {
+            // Every attempt starts from a fresh authorization decision: a shell kept alive
+            // would hide a later revoke, and a shell kept alive after a partial failure
+            // would leak a root process.
+            runCatching { shell.close() }
+            activeShell = null
+        }
+    }
+
+    private fun runProbes(shell: Shell, shellBefore: Shell?): String {
         if (!shell.isRoot) {
             val nonRootStatus = shell.status
-            shell.close()
-            activeShell = null
             return RootSpikeEvidence.format(
                 attempt = attempt,
                 device = deviceInfo(
@@ -150,7 +160,7 @@ class RootSpikeActivity : Activity() {
                 device = deviceInfo(
                     selinux = "unknown",
                     grantState = "granted",
-                    shellStatus = "root_uid_not_zero",
+                    shellStatus = "root_uid_unverified",
                     shellStatusInt = shell.status,
                     shellCachedBefore = shellBefore != null,
                 ),
@@ -211,11 +221,12 @@ class RootSpikeActivity : Activity() {
 
     private fun runProbe(shell: Shell, id: String, command: String): RawProbe {
         val safeCommand = RootSpikeProtocol.requireAllowlisted(command)
-        val result = shell.newJob().add(safeCommand).exec()
+        val result = RootSpikeShellRunner.execute(shell.newJob().add(safeCommand))
         return RawProbe(
             id = id,
-            exitCode = result.code,
-            output = result.out.take(RootSpikeProtocol.MAX_LINES),
+            exitCode = result.exitCode,
+            output = result.stdout.take(RootSpikeProtocol.MAX_LINES),
+            errorOutput = result.stderr.take(RootSpikeProtocol.MAX_LINES),
         )
     }
 
@@ -232,15 +243,16 @@ class RootSpikeActivity : Activity() {
         val safeCommand = RootSpikeProtocol.requireAllowlisted(command)
         val future = timedProbeExecutor.submit(
             Callable {
-                shell.newJob().add(safeCommand).exec()
+                RootSpikeShellRunner.execute(shell.newJob().add(safeCommand))
             },
         )
         return try {
             val result = future.get(timeoutSeconds, TimeUnit.SECONDS)
             RawProbe(
                 id = id,
-                exitCode = result.code,
-                output = result.out.take(RootSpikeProtocol.MAX_LINES),
+                exitCode = result.exitCode,
+                output = result.stdout.take(RootSpikeProtocol.MAX_LINES),
+                errorOutput = result.stderr.take(RootSpikeProtocol.MAX_LINES),
             )
         } catch (_: TimeoutException) {
             future.cancel(true)
@@ -305,6 +317,7 @@ class RootSpikeActivity : Activity() {
                 exitCode = -1,
                 timedOut = category == "timeout",
                 lineCount = 0,
+                stderrLineCount = 0,
                 recordCount = 0,
                 category = category,
             ),
@@ -358,12 +371,14 @@ class RootSpikeActivity : Activity() {
         val exitCode: Int,
         val timedOut: Boolean = false,
         val output: List<String>,
+        val errorOutput: List<String> = emptyList(),
     ) {
         fun summary(recordCount: Int, category: String) = SpikeProbeResult(
             id = id,
             exitCode = exitCode,
             timedOut = timedOut,
             lineCount = output.size,
+            stderrLineCount = errorOutput.size,
             recordCount = recordCount,
             category = category,
         )
