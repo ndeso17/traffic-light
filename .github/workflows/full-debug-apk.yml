@@ -152,7 +152,7 @@ jobs:
               echo "manifest does not declare RootSpikeActivity"
               exit 1
             fi
-            if ! grep -q "android.intent.action.LAUNCHER" /tmp/full-debug-manifest.txt; then
+            if ! grep -q "android.intent.category.LAUNCHER" /tmp/full-debug-manifest.txt; then
               echo "manifest has no launcher activity"
               exit 1
             fi
