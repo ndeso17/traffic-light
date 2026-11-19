@@ -32,6 +32,7 @@ class RootSpikeActivity : Activity() {
     private val waitExecutor = Executors.newSingleThreadExecutor()
     private var activeShell: Shell? = null
     private var attempt = 0
+    private var startupShellCached = false
     private lateinit var status: TextView
     private lateinit var runButton: Button
 
@@ -39,6 +40,8 @@ class RootSpikeActivity : Activity() {
         super.onCreate(savedInstanceState)
         Shell.enableVerboseLogging = false
         Shell.setDefaultBuilder(Shell.Builder.create().setTimeout(SHELL_START_TIMEOUT_SECONDS))
+        // Measured here so startup behaviour is evidence, not a hardcoded claim.
+        startupShellCached = runCatching { Shell.getCachedShell() != null }.getOrDefault(false)
         setContentView(createContent())
         status.text = buildString {
             appendLine("No root request has been made.")
@@ -78,35 +81,36 @@ class RootSpikeActivity : Activity() {
     private fun runAfterExplicitAction() {
         runButton.isEnabled = false
         attempt += 1
-        status.text = "Explicit action recorded (attempt $attempt). Waiting for the root-manager decision…"
-        val future = commandExecutor.submit(Callable { executeSpike() })
+        val currentAttempt = attempt
+        status.text = "Explicit action recorded (attempt $currentAttempt). Waiting for the root-manager decision…"
+        val future = commandExecutor.submit(Callable { executeSpike(currentAttempt) })
         waitExecutor.execute {
             val evidence = try {
                 future.get(SPIKE_TIMEOUT_SECONDS, TimeUnit.SECONDS)
             } catch (_: TimeoutException) {
                 future.cancel(true)
                 activeShell?.close()
-                failureEvidence("timeout")
+                failureEvidence(currentAttempt, "timeout")
             } catch (_: Exception) {
-                failureEvidence("internal_failure")
+                failureEvidence(currentAttempt, "internal_failure")
             }
             val destination = try {
-                writeEvidence(evidence)
+                writeEvidence(currentAttempt, evidence)
             } catch (failure: Exception) {
-                showResult("Attempt $attempt finished but evidence could not be written: ${failure.javaClass.simpleName}")
+                showResult("Attempt $currentAttempt finished but evidence could not be written: ${failure.javaClass.simpleName}")
                 return@execute
             }
-            showResult("Attempt $attempt finished. Safe evidence written to:\n$destination\n\n$evidence")
+            showResult("Attempt $currentAttempt finished. Safe evidence written to:\n$destination\n\n$evidence")
         }
     }
 
-    private fun executeSpike(): String {
+    private fun executeSpike(currentAttempt: Int): String {
         val shellBefore = Shell.getCachedShell()
         val shell = try {
             Shell.getShell().also { activeShell = it }
         } catch (_: Exception) {
             return RootSpikeEvidence.format(
-                attempt = attempt,
+                attempt = currentAttempt,
                 device = deviceInfo(
                     selinux = "unknown",
                     grantState = "shell_unavailable",
@@ -122,8 +126,12 @@ class RootSpikeActivity : Activity() {
             )
         }
 
+        // Read the libsu status while the shell is still alive. A later probe deliberately
+        // closes the shell, and libsu resets its status to UNKNOWN when that happens.
+        val acquiredStatus = shell.status
+
         try {
-            return runProbes(shell, shellBefore)
+            return runProbes(currentAttempt, shell, shellBefore, acquiredStatus)
         } finally {
             // Every attempt starts from a fresh authorization decision: a shell kept alive
             // would hide a later revoke, and a shell kept alive after a partial failure
@@ -133,16 +141,23 @@ class RootSpikeActivity : Activity() {
         }
     }
 
-    private fun runProbes(shell: Shell, shellBefore: Shell?): String {
+    private fun runProbes(
+        currentAttempt: Int,
+        shell: Shell,
+        shellBefore: Shell?,
+        acquiredStatus: Int,
+    ): String {
         if (!shell.isRoot) {
-            val nonRootStatus = shell.status
             return RootSpikeEvidence.format(
-                attempt = attempt,
+                attempt = currentAttempt,
                 device = deviceInfo(
                     selinux = "unknown",
                     grantState = "denied_or_unavailable",
-                    shellStatus = "non_root",
-                    shellStatusInt = nonRootStatus,
+                    shellStatus = RootSpikeProtocol.shellStatusLabel(
+                        acquiredStatus = acquiredStatus,
+                        uidVerified = false,
+                    ),
+                    shellStatusInt = acquiredStatus,
                     shellCachedBefore = shellBefore != null,
                 ),
                 probes = emptyList(),
@@ -154,14 +169,18 @@ class RootSpikeActivity : Activity() {
         }
 
         val uid = runProbe(shell, "uid", RootSpikeProtocol.ALLOWLIST[0])
-        if (!RootSpikeProtocol.parseUid(uid.output)) {
+        val uidVerified = RootSpikeProtocol.parseUid(uid.output)
+        if (!uidVerified) {
             return RootSpikeEvidence.format(
-                attempt = attempt,
+                attempt = currentAttempt,
                 device = deviceInfo(
                     selinux = "unknown",
                     grantState = "granted",
-                    shellStatus = "root_uid_unverified",
-                    shellStatusInt = shell.status,
+                    shellStatus = RootSpikeProtocol.shellStatusLabel(
+                        acquiredStatus = acquiredStatus,
+                        uidVerified = false,
+                    ),
+                    shellStatusInt = acquiredStatus,
                     shellCachedBefore = shellBefore != null,
                 ),
                 probes = listOf(uid.summary(0, "malformed")),
@@ -174,9 +193,15 @@ class RootSpikeActivity : Activity() {
 
         val selinux = runProbe(shell, "selinux", RootSpikeProtocol.ALLOWLIST[1])
         val provider = runProbe(shell, "provider", RootSpikeProtocol.ALLOWLIST[2])
-        val isub = runProbe(shell, "isub", RootSpikeProtocol.ALLOWLIST[3])
+        val providerSubscription = runProbe(shell, "provider_subscription", RootSpikeProtocol.ALLOWLIST[3])
+        val isub = runProbe(shell, "isub", RootSpikeProtocol.ALLOWLIST[4])
         val providerRecords = if (provider.exitCode == 0) {
             RootSpikeProtocol.parseContentQuery(provider.output)
+        } else {
+            emptyList()
+        }
+        val subscriptionRows = if (providerSubscription.exitCode == 0) {
+            RootSpikeProtocol.parseProviderRows(providerSubscription.output)
         } else {
             emptyList()
         }
@@ -195,19 +220,33 @@ class RootSpikeActivity : Activity() {
             timeoutSeconds = INJECTED_TIMEOUT_SECONDS,
         )
 
+        val subscriptionIdColumn = when {
+            providerSubscription.exitCode != 0 -> "query_failed"
+            subscriptionRows.isEmpty() -> "no_rows"
+            RootSpikeProtocol.subscriptionIdColumnPresent(subscriptionRows) -> "present"
+            else -> "absent"
+        }
+
         return RootSpikeEvidence.format(
-            attempt = attempt,
+            attempt = currentAttempt,
             device = deviceInfo(
                 selinux = RootSpikeProtocol.parseSelinux(selinux.output),
                 grantState = "granted",
-                shellStatus = "root_uid_0",
-                shellStatusInt = shell.status,
+                shellStatus = RootSpikeProtocol.shellStatusLabel(
+                    acquiredStatus = acquiredStatus,
+                    uidVerified = true,
+                ),
+                shellStatusInt = acquiredStatus,
                 shellCachedBefore = shellBefore != null,
             ),
             probes = listOf(
                 uid.summary(0, categoryOf(uid)),
                 selinux.summary(0, categoryOf(selinux)),
                 provider.summary(providerRecords.size, categoryOf(provider, providerRecords.isEmpty())),
+                providerSubscription.summary(
+                    subscriptionRows.size,
+                    categoryOf(providerSubscription, subscriptionRows.isEmpty()),
+                ),
                 isub.summary(isubRecords.size, categoryOf(isub, isubRecords.isEmpty())),
                 failureProbe.summary(0, categoryOf(failureProbe)),
                 timeoutProbe.summary(0, categoryOf(timeoutProbe)),
@@ -216,6 +255,10 @@ class RootSpikeActivity : Activity() {
             records = records,
             providerRecordCount = providerRecords.size,
             isubRecordCount = isubRecords.size,
+            subscriptionIdColumn = subscriptionIdColumn,
+            subscriptionIdMatchesRowId = RootSpikeProtocol.subscriptionIdMatchesRowId(subscriptionRows),
+            providerMarkers = RootSpikeProtocol.markerCounts(provider.output, RootSpikeProtocol.PROVIDER_MARKERS),
+            isubMarkers = RootSpikeProtocol.markerCounts(isub.output, RootSpikeProtocol.ISUB_MARKERS),
         )
     }
 
@@ -286,6 +329,7 @@ class RootSpikeActivity : Activity() {
         libsuGrantState = grantState,
         shellStatus = shellStatus,
         shellStatusInt = shellStatusInt,
+        startupShellCached = startupShellCached,
         authorizationRequestedByExplicitAction = true,
         shellCachedBefore = shellCachedBefore,
         suVisibleToApp = suVisibleToApp(),
@@ -302,8 +346,8 @@ class RootSpikeActivity : Activity() {
         }
     }
 
-    private fun failureEvidence(category: String): String = RootSpikeEvidence.format(
-        attempt = attempt,
+    private fun failureEvidence(currentAttempt: Int, category: String): String = RootSpikeEvidence.format(
+        attempt = currentAttempt,
         device = deviceInfo(
             selinux = "unknown",
             grantState = "unknown",
@@ -328,8 +372,8 @@ class RootSpikeActivity : Activity() {
         isubRecordCount = 0,
     )
 
-    private fun writeEvidence(evidence: String): String {
-        val fileName = "traffic-light-root-spike-attempt-$attempt.txt"
+    private fun writeEvidence(currentAttempt: Int, evidence: String): String {
+        val fileName = RootSpikeEvidence.fileName(currentAttempt, System.currentTimeMillis())
         val bytes = evidence.toByteArray(StandardCharsets.UTF_8)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             val values = ContentValues().apply {

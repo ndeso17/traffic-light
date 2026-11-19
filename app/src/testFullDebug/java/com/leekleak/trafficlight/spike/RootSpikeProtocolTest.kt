@@ -14,6 +14,7 @@ class RootSpikeProtocolTest {
                 "id -u",
                 "getenforce",
                 "content query --uri content://telephony/siminfo --projection _id:sim_id:carrier_name:imsi",
+                "content query --uri content://telephony/siminfo --projection _id:subscription_id:sim_id:carrier_name:imsi",
                 "dumpsys isub",
             ),
             RootSpikeProtocol.ALLOWLIST,
@@ -57,16 +58,119 @@ class RootSpikeProtocolTest {
     }
 
     @Test
+    fun `shell status label reports uid zero as root even when libsu status was reset`() {
+        assertEquals(
+            "root_uid_0",
+            RootSpikeProtocol.shellStatusLabel(acquiredStatus = -1, uidVerified = true),
+        )
+    }
+
+    @Test
+    fun `shell status label reports non root when libsu says non root and uid is not zero`() {
+        assertEquals(
+            "non_root",
+            RootSpikeProtocol.shellStatusLabel(acquiredStatus = 0, uidVerified = false),
+        )
+    }
+
+    @Test
+    fun `shell status label is unknown when neither uid nor libsu proves root`() {
+        assertEquals(
+            "unknown",
+            RootSpikeProtocol.shellStatusLabel(acquiredStatus = -1, uidVerified = false),
+        )
+    }
+
+    @Test
+    fun `shell status label keeps unverified root distinct from verified root`() {
+        assertEquals(
+            "root_uid_unverified",
+            RootSpikeProtocol.shellStatusLabel(acquiredStatus = 1, uidVerified = false),
+        )
+    }
+
+    @Test
+    fun `provider rows expose subscription id column separately from row id`() {
+        val rows = RootSpikeProtocol.parseProviderRows(
+            listOf("Row: 0 _id=7, subscription_id=21, sim_id=0, carrier_name=Telkomsel, imsi=510011234567890"),
+        )
+
+        assertEquals(1, rows.size)
+        assertEquals(7, rows[0].rowId)
+        assertEquals(21, rows[0].subscriptionId)
+        assertEquals(0, rows[0].simSlotIndex)
+    }
+
+    @Test
+    fun `subscription id column absence is reported as unknown rather than false`() {
+        val rows = RootSpikeProtocol.parseProviderRows(
+            listOf("Row: 0 _id=7, sim_id=0, carrier_name=Telkomsel"),
+        )
+
+        assertFalse(RootSpikeProtocol.subscriptionIdColumnPresent(rows))
+        assertEquals(null, RootSpikeProtocol.subscriptionIdMatchesRowId(rows))
+    }
+
+    @Test
+    fun `subscription id column equal to row id is reported`() {
+        val rows = RootSpikeProtocol.parseProviderRows(
+            listOf("Row: 0 _id=7, subscription_id=7, sim_id=0, carrier_name=Telkomsel"),
+        )
+
+        assertTrue(RootSpikeProtocol.subscriptionIdColumnPresent(rows))
+        assertEquals(true, RootSpikeProtocol.subscriptionIdMatchesRowId(rows))
+    }
+
+    @Test
+    fun `marker counts report structural keys without values`() {
+        val counts = RootSpikeProtocol.markerCounts(
+            listOf(
+                "Row: 0 _id=7, sim_id=0, carrier_name=Telkomsel, imsi=510011234567890",
+                "Row: 1 _id=8, sim_id=1, carrier_name=XL",
+            ),
+            RootSpikeProtocol.PROVIDER_MARKERS,
+        )
+
+        assertTrue(counts.contains("rowId=2"))
+        assertTrue(counts.contains("simSlot=2"))
+        assertTrue(counts.contains("subscriberId=1"))
+        assertFalse(counts.contains("Telkomsel"))
+        assertFalse(counts.contains("510011234567890"))
+    }
+
+    @Test
+    fun `isub marker counts detect a changed dump format`() {
+        val counts = RootSpikeProtocol.markerCounts(
+            listOf("mSubscriptionInfo=whatever", "mSlotIndexToSubId: {0=1}"),
+            RootSpikeProtocol.ISUB_MARKERS,
+        )
+
+        assertTrue(counts.contains("mSubscriptionInfo=1"))
+        assertTrue(counts.contains("slotIndexToSubId=1"))
+    }
+
+    @Test
+    fun `isub parser also accepts the plain subscription info dump shape`() {
+        val records = RootSpikeProtocol.parseIsubDump(
+            listOf("  SubscriptionInfo{id=3, simSlotIndex=1, carrierName=XL}"),
+        )
+
+        assertEquals(1, records.size)
+        assertEquals(3, records[0].subscriptionId)
+        assertEquals(1, records[0].simSlotIndex)
+    }
+
+    @Test
     fun `content query parser extracts id slot carrier and subscriber presence`() {
         val records = RootSpikeProtocol.parseContentQuery(
             listOf(
-                "Row: 0 _id=1, sim_id=0, carrier_name=Telkomsel, imsi=510011234567890",
-                "Row: 1 _id=2, sim_id=1, carrier_name=XL Axiata, imsi=null",
+                "Row: 0 _id=1, subscription_id=21, sim_id=0, carrier_name=Telkomsel, imsi=510011234567890",
+                "Row: 1 _id=2, subscription_id=22, sim_id=1, carrier_name=XL Axiata, imsi=null",
             ),
         )
 
         assertEquals(2, records.size)
-        assertEquals(1, records[0].subscriptionId)
+        assertEquals(21, records[0].subscriptionId)
         assertEquals(0, records[0].simSlotIndex)
         assertEquals("Telkomsel", records[0].carrierName)
         assertTrue(records[0].subscriberIdPresent)
@@ -209,9 +313,17 @@ class RootSpikeProtocolTest {
 
         val evidence = evidence(records = records)
 
-        assertTrue(evidence.contains("protocolVersion=1"))
+        assertTrue(evidence.contains("protocolVersion=2"))
         assertTrue(evidence.contains("recordCount=2"))
         assertTrue(evidence.contains("record[1].simSlotIndex=1"))
+    }
+
+    @Test
+    fun `evidence marks valid subscription IDs without exposing their values`() {
+        val evidence = evidence(records = listOf(record(824173, 0, "Carrier")))
+
+        assertTrue(evidence.contains("record[0].subscriptionIdPresent=true"))
+        assertFalse(evidence.contains("824173"))
     }
 
     @Test
@@ -228,6 +340,20 @@ class RootSpikeProtocolTest {
     @Test
     fun `evidence states that startup never requested a shell`() {
         assertTrue(evidence().contains("startupShellRequest=false"))
+    }
+
+    @Test
+    fun `evidence records that no shell was cached when the activity started`() {
+        assertTrue(evidence().contains("startupShellCached=false"))
+    }
+
+    @Test
+    fun `evidence file name carries attempt and timestamp so attempts never collide`() {
+        val name = RootSpikeEvidence.fileName(attempt = 4, epochMillis = 1_700_000_000_000L)
+
+        assertTrue(name.startsWith("traffic-light-root-spike-attempt-4-"))
+        assertTrue(name.endsWith(".txt"))
+        assertFalse(name.contains(" "))
     }
 
     @Test
@@ -304,6 +430,7 @@ class RootSpikeProtocolTest {
         libsuGrantState = "granted",
         shellStatus = "root_uid_0",
         shellStatusInt = 2,
+        startupShellCached = false,
         authorizationRequestedByExplicitAction = true,
         shellCachedBefore = false,
         suVisibleToApp = false,
