@@ -116,6 +116,45 @@ Deviasi dan catatan teknis:
 - Build lokal Gradle sengaja dihindari sesuai batasan environment (OOM dan reboot sebelumnya); otoritas build ada di GitHub Actions.
 - Risiko baru: environment executor tidak dapat mengunduh artifact tanpa kredensial GitHub, sehingga pemasangan APK dan pengumpulan evidence perangkat bergantung pada aksi pengguna; T-002–T-004 belum bisa diselesaikan sebelum file evidence `Download/traffic-light-root-spike-attempt-<N>.txt` dibaca.
 
+### Log WP-01 (Executor) — evidence perangkat attempt 1–3
+
+Tiga attempt dijalankan pengguna pada build `1228363` (moto g57 power, Android 16 / SDK 36, host rooted DroidSpace):
+
+```text
+attempt=1 shellStatus=non_root          shellStatusInt=0 suVisibleToApp=false  (denial)
+attempt=2 shellStatus=root_uid_not_zero shellStatusInt=1 suVisibleToApp=true   probe[uid].exitCode=0 lineCount=0
+attempt=3 shellStatus=root_uid_not_zero shellStatusInt=1 suVisibleToApp=true   probe[uid].exitCode=0 lineCount=0
+```
+
+Temuan:
+
+- Denial fail-safe: tidak ada crash, fallback `NON_ROOT_SHELL` (`shellStatusInt=0`), evidence tetap tertulis. Prompt hanya muncul setelah tombol ditekan pada kedua skenario.
+- Grant berhasil: libsu melaporkan `ROOT_SHELL` (`shellStatusInt=1`). Jadi prompt/deny/grant tidak terjadi saat initialization.
+- Bug harness ditemukan: `probe[uid].exitCode=0` dengan `lineCount=0`. Bytecode libsu 6.0.0 (`JobTask.run`) membuktikan `Shell.Job` hanya menampung output bila pemanggil mendaftarkan sink lewat `Shell.Job.to(...)`; tanpa itu output dibuang meski exit code terbaca. Perbaikan: `RootSpikeShellRunner` mendaftarkan sink stdout+stderr sebelum `exec()`.
+- Bug kedua: jalur `root_uid_not_zero` tidak menutup shell, sehingga attempt 3 memakai `shellCachedBefore=true` dan revoke berikutnya akan tersamarkan. Perbaikan: shell ditutup di semua jalur (`try/finally`), dan setiap attempt mengevaluasi ulang otorisasi.
+- Evidence kini juga mencatat `probe[id].stderrLineCount` agar kegagalan `content query`/`dumpsys` dapat dibedakan tanpa mencatat output mentah.
+
+Gate/evidence mentah (commit `b4671b9`):
+
+```text
+$ curl -s https://api.github.com/repos/ndeso17/traffic-light/actions/runs/44447434395/jobs
+JOB 135302889564 completed success
+   7 Build Full Debug APK | completed success
+   8 Upload Full Debug APK | completed success
+   9 Unit test root spike protocol | completed success
+   10 Prove Play and Lite do not carry libsu | completed success
+   11 Verify libsu reaches only the Full Debug variant | completed success
+   12 Verify spike harness is packaged | completed success
+   15 Enforce build and test results | completed success
+
+$ curl -s https://api.github.com/repos/ndeso17/traffic-light/actions/runs/44447434395/artifacts
+14494480735 trafficlight-full-debug-b4671b9fd1be8be9963a230f50f6521f7ea0f5c5 18930020
+```
+
+- Unit test lokal non-Gradle: `OK (28 tests)` (27 protocol/evidence + 1 regression capture), harness compile bersih terhadap `android-37.2/android.jar` + libsu.
+- TDD untuk bug capture: test ditulis lebih dulu, gagal pada `outputSinksRegistered` dengan implementasi yang meniru perilaku libsu (output dibuang), lalu hijau setelah sink didaftarkan.
+- T-002 dan T-003 belum dicentang: grant terbukti, tetapi UID root, SELinux, dan record SIM belum terbaca pada build yang memperbaiki capture. Perlu satu rangkaian attempt baru pada artifact `14494480735`.
+
 ---
 
 ## WP-02 — Domain contract privileged access
