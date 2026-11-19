@@ -58,25 +58,31 @@ jobs:
             "cmake;4.1.2" \
             "ndk;30.0.16248370"
 
-      - name: Build Full Debug APK
+      - name: Build all affected debug flavors
         id: assemble
         continue-on-error: true
         shell: bash
         run: |
           set -o pipefail
           ./gradlew --no-daemon --max-workers=2 \
-            :app:assembleFullDebug --stacktrace 2>&1 | tee /tmp/assemble-full-debug.log
+            :app:assembleFullDebug \
+            :app:assemblePlayDebug \
+            :app:assembleLiteDebug \
+            --stacktrace 2>&1 | tee /tmp/assemble-full-debug.log
 
       - name: Upload Full Debug APK
         if: always() && steps.assemble.outcome == 'success'
         uses: actions/upload-artifact@v7
         with:
           name: trafficlight-full-debug-${{ github.sha }}
-          path: app/build/outputs/apk/full/debug/*.apk
+          path: |
+            app/build/outputs/apk/full/debug/*.apk
+            app/build/outputs/apk/play/debug/*.apk
+            app/build/outputs/apk/lite/debug/*.apk
           if-no-files-found: error
           retention-days: 7
 
-      - name: Unit test root spike protocol
+      - name: Unit test privileged access and root protocol
         id: spike_unit_test
         continue-on-error: true
         shell: bash
@@ -85,6 +91,7 @@ jobs:
           ./gradlew --no-daemon --max-workers=2 \
             :app:testFullDebugUnitTest \
             --tests "com.leekleak.trafficlight.spike.*" \
+            --tests "com.leekleak.trafficlight.integrations.*" \
             --stacktrace 2>&1 | tee /tmp/spike-unit-test.log
 
       - name: Prove Play and Lite do not carry libsu
@@ -140,6 +147,8 @@ jobs:
               "Lcom/leekleak/trafficlight/spike/RootSpikeActivity;" \
               "Lcom/leekleak/trafficlight/spike/RootSpikeProtocol;" \
               "Lcom/leekleak/trafficlight/spike/RootSpikeShellRunner;" \
+              "Lcom/leekleak/trafficlight/integrations/RootPrivilegedBackend;" \
+              "Lcom/leekleak/trafficlight/integrations/PrivilegedAccessProviderImpl;" \
               "Lcom/topjohnwu/superuser/Shell;"; do
               if ! strings /tmp/full-debug-classes.dex | grep -qF "$symbol"; then
                 echo "symbol missing from dex: $symbol"

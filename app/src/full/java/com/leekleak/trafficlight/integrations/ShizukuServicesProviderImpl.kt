@@ -22,9 +22,9 @@ class ShizukuServicesProviderImpl(
         scope.launch { updateSimData() }
     }
 
-    private fun getSubscriptionInfos(): List<SubscriptionInfo> = shizukuHelper.getSubscriptionInfos()
+    fun getSubscriptionInfos(): List<SubscriptionInfo> = shizukuHelper.getSubscriptionInfos()
 
-    private fun getSubscriberID(subscriptionId: Int): String? = shizukuHelper.getSubscriberID(subscriptionId)
+    fun getSubscriberID(subscriptionId: Int): String? = shizukuHelper.getSubscriberID(subscriptionId)
 
     override suspend fun updateSimData() {
         if (shizukuRunning() && shizukuPermission() == PERMISSION_GRANTED) {

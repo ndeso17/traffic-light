@@ -104,19 +104,9 @@ aboutLibraries {
     }
 }
 
-// AGP 9.5 creates compound variant source sets (for example fullDebug) and their
-// configurations only after this build script has been evaluated, so a plain
-// "fullDebugImplementation" dependency cannot be declared in the dependencies block below.
-// The dependency is therefore added lazily to the single Full Debug variant, which keeps
-// Full Release, Play and Lite free of libsu.
-configurations.configureEach {
-    if (this.name in setOf("fullDebugImplementation", "testFullDebugImplementation")) {
-        // The spike unit tests fake the libsu job contract, so libsu must also be on
-        // the Full Debug unit-test classpath. Neither configuration reaches release/play/lite.
-        this.dependencies.add(project.dependencies.create(libs.libsu.core.get()))
-    }
-}
-
+// libsu is a Full-flavor dependency: the root backend lives in src/full and must compile for
+// every Full variant (debug and release). Play and Lite never see it, and the CI dependency
+// checks assert exactly that.
 dependencies {
     implementation(project(":core"))
 
@@ -176,6 +166,8 @@ dependencies {
     "playImplementation"(project(":playIntegration"))
 
     "fullImplementation"(project(":shizukuIntegration"))
+    // Root backend (WP-03). Full only; Play/Lite must stay free of libsu.
+    "fullImplementation"(libs.libsu.core.get())
 
     "fullImplementation"(project(":iperfIntegration"))
     "playImplementation"(project(":iperfIntegration"))
