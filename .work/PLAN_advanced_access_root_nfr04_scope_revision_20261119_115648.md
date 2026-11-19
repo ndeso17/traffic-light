@@ -115,7 +115,7 @@ Temuan yang diteruskan (bukan blocker WP-01): identitas/versi root manager belum
 ---
 
 ## WP-02 — Domain contract privileged access
-Status: todo
+Status: done
 
 File:
 - `app/src/main/java/com/leekleak/trafficlight/integrations/PrivilegedAccess.kt`
@@ -125,9 +125,9 @@ Dependensi:
 - WP-01
 
 Tugas:
-- [ ] T-006 Tambahkan model kind, availability, authorization, state, error, record/snapshot (FR-04, FR-06, NFR-05).
-- [ ] T-007 Definisikan `PrivilegedBackend` dan `PrivilegedAccessProvider` tanpa tipe backend bocor ke UI (FR-04, NFR-05).
-- [ ] T-008 Test pemisahan availability dan authorization (FR-01, FR-09).
+- [x] T-006 Tambahkan model kind, availability, authorization, state, error, record/snapshot (FR-04, FR-06, NFR-05).
+- [x] T-007 Definisikan `PrivilegedBackend` dan `PrivilegedAccessProvider` tanpa tipe backend bocor ke UI (FR-04, NFR-05).
+- [x] T-008 Test pemisahan availability dan authorization (FR-01, FR-09).
 
 Kriteria terima:
 - Main source set tanpa libsu; contract dapat diimplementasikan Root/Shizuku/Basic.
@@ -141,7 +141,7 @@ Mitigasi:
 ---
 
 ## WP-03 — Root backend Full-only dengan libsu
-Status: todo
+Status: done
 
 File:
 - `gradle/libs.versions.toml`
@@ -154,11 +154,11 @@ Dependensi:
 - WP-02
 
 Tugas:
-- [ ] T-009 Tambahkan libsu hanya sebagai `fullImplementation` (FR-08, SC-06).
-- [ ] T-010 Implementasikan availability tanpa grant dan authorization eksplisit (FR-01, FR-02, SC-05).
-- [ ] T-011 Implementasikan protocol spike dengan timeout, cancellation, allowlist, exit-code check, strict parser (FR-03, NFR-01).
-- [ ] T-012 Petakan denial/revoke/timeout/failure/malformed tanpa log sensitif (FR-05, FR-09, NFR-02, NFR-03).
-- [ ] T-013 Test success dan seluruh failure mode (FR-03, FR-05, FR-09).
+- [x] T-009 Tambahkan libsu hanya sebagai `fullImplementation` (FR-08, SC-06).
+- [x] T-010 Implementasikan availability tanpa grant dan authorization eksplisit (FR-01, FR-02, SC-05).
+- [x] T-011 Implementasikan protocol spike dengan timeout, cancellation, allowlist, exit-code check, strict parser (FR-03, NFR-01).
+- [x] T-012 Petakan denial/revoke/timeout/failure/malformed tanpa log sensitif (FR-05, FR-09, NFR-02, NFR-03).
+- [x] T-013 Test success dan seluruh failure mode (FR-03, FR-05, FR-09).
 
 Kriteria terima:
 - Snapshot valid; initialization tidak prompt; tidak ada injection/log sensitif; libsu tidak hadir di Play/Lite.
@@ -172,7 +172,7 @@ Mitigasi:
 ---
 
 ## WP-04 — Adaptasi Shizuku dan Basic backend
-Status: todo
+Status: done
 
 File:
 - `app/src/main/java/com/leekleak/trafficlight/integrations/ShizukuServicesProvider.kt`
@@ -185,10 +185,10 @@ Dependensi:
 - WP-02
 
 Tugas:
-- [ ] T-014 Bungkus Shizuku existing sebagai backend tanpa mengubah binder semantics (FR-07).
-- [ ] T-015 Implementasikan Basic backend setara `updateSimDataBasic` (FR-05, SC-04).
-- [ ] T-016 Pertahankan bind/unbind/callback dengan error generik (FR-07, NFR-03).
-- [ ] T-017 Test snapshot Shizuku dan Basic reconciliation (FR-07, SC-04, SC-07).
+- [x] T-014 Bungkus Shizuku existing sebagai backend tanpa mengubah binder semantics (FR-07).
+- [x] T-015 Implementasikan Basic backend setara `updateSimDataBasic` (FR-05, SC-04).
+- [x] T-016 Pertahankan bind/unbind/callback dengan error generik (FR-07, NFR-03).
+- [x] T-017 Test snapshot Shizuku dan Basic reconciliation (FR-07, SC-04, SC-07).
 
 Kriteria terima:
 - Shizuku dan Basic existing tetap bekerja; UI tidak memerlukan tipe binder.
@@ -202,7 +202,7 @@ Mitigasi:
 ---
 
 ## WP-05 — Coordinator priority dan runtime fallback
-Status: todo
+Status: done
 
 File:
 - `app/src/main/java/com/leekleak/trafficlight/integrations/PrivilegedAccessProviderImpl.kt`
@@ -213,11 +213,11 @@ Dependensi:
 - WP-04
 
 Tugas:
-- [ ] T-018 Implementasikan Root → Shizuku → Basic dengan StateFlow dan Mutex (FR-04, NFR-05, NFR-06).
-- [ ] T-019 Implementasikan runtime fallback (FR-05, SC-03, SC-04).
-- [ ] T-020 Serialisasi authorization/enable/refresh dan hormati cancellation (NFR-03, NFR-06).
-- [ ] T-021 Sinkronkan snapshot ke DataPlanManager tanpa persistent grant (FR-09, NFR-02).
-- [ ] T-022 Test priority, fallback, concurrency, cancellation, dan no-startup authorization (SC-02–SC-05).
+- [x] T-018 Implementasikan Root → Shizuku → Basic dengan StateFlow dan Mutex (FR-04, NFR-05, NFR-06).
+- [x] T-019 Implementasikan runtime fallback (FR-05, SC-03, SC-04).
+- [x] T-020 Serialisasi authorization/enable/refresh dan hormati cancellation (NFR-03, NFR-06).
+- [x] T-021 Sinkronkan snapshot ke DataPlanManager tanpa persistent grant (FR-09, NFR-02).
+- [x] T-022 Test priority, fallback, concurrency, cancellation, dan no-startup authorization (SC-02–SC-05).
 
 Kriteria terima:
 - Root sehat menang; error recoverable fallback; initialization tidak request; tidak ada refresh loop.
@@ -231,7 +231,7 @@ Mitigasi:
 ---
 
 ## WP-06 — Preference migration, PermissionManager, dan flavor DI
-Status: todo
+Status: done
 
 File:
 - `app/src/main/java/com/leekleak/trafficlight/database/AppPreferenceRepo.kt`
@@ -243,10 +243,10 @@ Dependensi:
 - WP-05
 
 Tugas:
-- [ ] T-023 Migrasikan intent `shizuku_tracking` ke `advanced_access_enabled`, bukan Root grant (FR-10).
-- [ ] T-024 Ubah PermissionManager ke state/action generik tanpa prompt lifecycle (FR-02, FR-06, SC-05).
-- [ ] T-025 Wire Full dan no-op/Basic Play/Lite (FR-08, SC-06).
-- [ ] T-026 Test migration idempotent, revoke/retry, dan no-request saat construction/update (FR-09, FR-10, SC-05).
+- [x] T-023 Migrasikan intent `shizuku_tracking` ke `advanced_access_enabled`, bukan Root grant (FR-10).
+- [x] T-024 Ubah PermissionManager ke state/action generik tanpa prompt lifecycle (FR-02, FR-06, SC-05).
+- [x] T-025 Wire Full dan no-op/Basic Play/Lite (FR-08, SC-06).
+- [x] T-026 Test migration idempotent, revoke/retry, dan no-request saat construction/update (FR-09, FR-10, SC-05).
 
 Kriteria terima:
 - Setup Shizuku existing terjaga; grant runtime-only; Play/Lite compile tanpa libsu.
@@ -260,7 +260,7 @@ Mitigasi:
 ---
 
 ## WP-07 — UI advanced access generik
-Status: todo
+Status: done
 
 File:
 - DataPlans/History ViewModel dan Compose files
@@ -271,11 +271,11 @@ Dependensi:
 - WP-06
 
 Tugas:
-- [ ] T-027 Ganti UI state Shizuku-specific dengan advanced state (FR-06, NFR-05).
-- [ ] T-028 Tambahkan rationale, aksi eksplisit, status Root/Shizuku/Basic, denial/retry/stopped (FR-02, FR-06, FR-09).
-- [ ] T-029 Pertahankan guidance/fallback Shizuku (FR-07).
-- [ ] T-030 Tambahkan strings dan accessibility tanpa klaim universal compatibility (NFR-04).
-- [ ] T-031 Test state/action dan no automatic prompt (SC-05).
+- [x] T-027 Ganti UI state Shizuku-specific dengan advanced state (FR-06, NFR-05).
+- [x] T-028 Tambahkan rationale, aksi eksplisit, status Root/Shizuku/Basic, denial/retry/stopped (FR-02, FR-06, FR-09).
+- [x] T-029 Pertahankan guidance/fallback Shizuku (FR-07).
+- [x] T-030 Tambahkan strings dan accessibility tanpa klaim universal compatibility (NFR-04).
+- [x] T-031 Test state/action dan no automatic prompt (SC-05).
 
 Kriteria terima:
 - Backend aktif jelas; root hanya diminta setelah aksi; Root aktif tidak menampilkan warning Shizuku; Basic usable.
@@ -289,7 +289,7 @@ Mitigasi:
 ---
 
 ## WP-08 — Regression, security, dan flavor isolation
-Status: todo
+Status: done
 
 File:
 - test files `app/src/test/`
@@ -299,11 +299,11 @@ Dependensi:
 - WP-03–WP-07
 
 Tugas:
-- [ ] T-032 Jalankan tests integrations/preferences/PermissionManager/DataPlan/NetworkUsage (SC-07).
-- [ ] T-033 Audit allowlist, timeout, cancellation, parser bounds, dan log redaction (NFR-01, NFR-02).
-- [ ] T-034 Verifikasi Play/Lite tanpa libsu/jalur `su` (FR-08, SC-06).
-- [ ] T-035 Build/test semua flavor dan catat blocker MockK/ByteBuddy jujur (NFR-03).
-- [ ] T-036 Test malformed/oversized output dan repeated fallback tanpa loop (FR-05, NFR-01, NFR-06).
+- [x] T-032 Jalankan tests integrations/preferences/PermissionManager/DataPlan/NetworkUsage (SC-07).
+- [x] T-033 Audit allowlist, timeout, cancellation, parser bounds, dan log redaction (NFR-01, NFR-02).
+- [x] T-034 Verifikasi Play/Lite tanpa libsu/jalur `su` (FR-08, SC-06).
+- [x] T-035 Build/test semua flavor dan catat blocker MockK/ByteBuddy jujur (NFR-03).
+- [x] T-036 Test malformed/oversized output dan repeated fallback tanpa loop (FR-05, NFR-01, NFR-06).
 
 Kriteria terima:
 - Gates lulus atau blocker bereproduksi; Full menyertakan Root; Play/Lite tidak; tidak ada injection/log sensitif.
@@ -345,6 +345,22 @@ Risiko:
 
 Mitigasi:
 - Jangan generalisasi hasil satu perangkat; tandai blocker acceptance; kumpulkan evidence per manager sebelum menyatakan matrix lengkap.
+
+---
+
+## Delivery Log WP-02–WP-08 (Executor/QC)
+
+- **WP-02 done:** backend-agnostic domain contract + availability/authorization separation tests (`6bc5b15`, test fixes `22ed97e`, `42b2eb0`).
+- **WP-03 done:** Full-only libsu root backend, constant allowlist, timeout/cancel, bounded parser, denial/revoke/failure tests (`f11d840`).
+- **WP-04 done:** Shizuku adapter, Basic backend, Play/Lite no-op adapters (`d98429b`).
+- **WP-05 done:** serialized Root → Shizuku → Basic coordinator, runtime fallback and reconciliation (`0f90c98`).
+- **WP-06 done:** `advanced_access_enabled` intent migration, generic PermissionManager, flavor DI (`6035a39`).
+- **WP-07 done:** generic advanced-access UI/rationale/state/copy (`282eb6b`).
+- **WP-08 done:** cancellation preservation + APK symbol/dependency isolation (`ba30c57`).
+
+QC evidence: GitHub Actions run `44571468132` **PASS**. `build-full-debug` dan `full-test-baseline` sukses; Full/Play/Lite APK dibangun; full test suite dijalankan dua kali; focused privileged/root tests sukses; Play/Lite bebas libsu dan simbol root execution; Full memuat libsu/root backend. Artifact diunduh ke `.artefak/run-44571468132/` (gitignored): 3 APK dan XML summary `178 tests, 0 failures, 0 errors, 0 skipped`. Host/lokal tidak menjalankan build sesuai kontrak.
+
+Known notes: device/runtime matrix bukan diklaim oleh WP-02–WP-08 dan tetap gate WP-09.
 
 ---
 
