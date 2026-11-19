@@ -63,6 +63,8 @@ Harness berada di source set `fullDebug` saja, sehingga tidak pernah ikut ke `fu
 
 libsu 6.0.0 hanya masuk sebagai `fullDebugImplementation`. Tidak ada `su` path detection di mana pun: pada KernelSU Next default-unmount, keberadaan `su` di `PATH` tidak dapat dibedakan dari "belum granted", sehingga ketersediaan root hanya boleh dibuktikan lewat grant eksplisit. `Shell.getShell()` dipanggil tepat satu kali, di dalam handler tombol.
 
+Catatan wiring dependensi (dibuktikan lewat CI): AGP 9.5.1 membuat source set gabungan `fullDebug` beserta configuration-nya pada fase variant creation, yaitu setelah blok `dependencies` dievaluasi. Deklarasi `"fullDebugImplementation"(...)` di dalam blok `dependencies` karena itu gagal dengan `Configuration with name 'fullDebugImplementation' not found`. Dependensi ditambahkan secara lazy melalui `configurations.configureEach` yang hanya menyentuh `fullDebugImplementation`, sehingga `fullRelease`, `play`, dan `lite` tetap tanpa libsu. Workflow CI memverifikasi tiga hal: libsu ada di `fullDebugRuntimeClasspath`, libsu tidak ada di `playDebugRuntimeClasspath`/`liteDebugRuntimeClasspath`, dan simbol `RootSpikeActivity`/`RootSpikeProtocol`/`Shell` benar-benar masuk ke dex APK.
+
 Allowlist probe (konstanta, tanpa input pengguna):
 
 ```text
@@ -92,7 +94,7 @@ Jalankan pada build Full terinstrumentasi, lalu catat hanya evidence aman:
 1. Cold start aplikasi utama; pastikan tidak ada prompt superuser.
 2. Buka launcher **Root Telephony Spike**; pastikan masih tidak ada prompt dan status awal menyatakan belum ada root request.
 3. Tekan **Request root and run spike**; verifikasi prompt baru muncul setelah aksi tersebut.
-4. Uji grant, denial, revoke, dan retry. Setelah setiap attempt, salin/rename `Download/traffic-light-root-spike.txt` sebelum menjalankan attempt berikutnya agar evidence tidak tertukar.
+4. Uji grant, denial, revoke, dan retry. Setiap attempt menghasilkan file berbeda bernama `traffic-light-root-spike-attempt-<N>.txt` agar evidence tidak tertukar.
 5. Setelah grant, verifikasi `shellStatus=root_uid_0`, probe `uid` exit code 0, dan `shellStatusInt` adalah status root libsu.
 6. Cocokkan `recordCount` dan slot non-sensitif dengan Settings/perangkat (dua SIM aktif di perangkat uji ini).
 7. Verifikasi subscription ID, slot, carrier, dan keberadaan (bukan nilai) subscriber ID.

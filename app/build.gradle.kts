@@ -104,6 +104,16 @@ aboutLibraries {
     }
 }
 
+// AGP 9.5 creates compound variant source sets (for example fullDebug) and their
+// configurations only after this build script has been evaluated, so a plain
+// "fullDebugImplementation" dependency cannot be declared in the dependencies block below.
+// The dependency is therefore added lazily to the single Full Debug variant, which keeps
+// Full Release, Play and Lite free of libsu.
+configurations.configureEach { configuration: org.gradle.api.artifacts.Configuration ->
+    if (configuration.name == "fullDebugImplementation") {
+        configuration.dependencies.add(project.dependencies.create(libs.libsu.core.get()))
+    }
+}
 
 dependencies {
     implementation(project(":core"))
@@ -166,7 +176,6 @@ dependencies {
     "fullImplementation"(project(":shizukuIntegration"))
 
     "fullImplementation"(project(":iperfIntegration"))
-    "fullDebugImplementation"(libs.libsu.core)
     "playImplementation"(project(":iperfIntegration"))
 
     implementation(libs.aboutlibraries.core)

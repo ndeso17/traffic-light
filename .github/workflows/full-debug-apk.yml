@@ -68,7 +68,7 @@ jobs:
             :app:assembleFullDebug --stacktrace 2>&1 | tee /tmp/assemble-full-debug.log
 
       - name: Upload Full Debug APK
-        if: steps.assemble.outcome == 'success'
+        if: always() && steps.assemble.outcome == 'success'
         uses: actions/upload-artifact@v7
         with:
           name: trafficlight-full-debug-${{ github.sha }}
@@ -108,12 +108,63 @@ jobs:
             done
           } 2>&1 | tee /tmp/flavor-isolation.log
 
+      - name: Verify libsu reaches only the Full Debug variant
+        id: libsu_scope
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            ./gradlew --no-daemon --max-workers=2 \
+              :app:dependencies --configuration fullDebugRuntimeClasspath \
+              > /tmp/full-debug-deps.txt
+            echo "fullDebug runtime classpath libsu entries:"
+            grep -i "libsu\|topjohnwu" /tmp/full-debug-deps.txt || true
+            if ! grep -qi "libsu\|topjohnwu" /tmp/full-debug-deps.txt; then
+              echo "fullDebug variant does not resolve libsu"
+              exit 1
+            fi
+          } 2>&1 | tee /tmp/libsu-scope.log
+
+      - name: Verify spike harness is packaged
+        id: harness_packaged
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            apk=$(ls app/build/outputs/apk/full/debug/*.apk | head -1)
+            echo "APK: $apk"
+            unzip -p "$apk" 'classes*.dex' > /tmp/full-debug-classes.dex
+            for symbol in \
+              "Lcom/leekleak/trafficlight/spike/RootSpikeActivity;" \
+              "Lcom/leekleak/trafficlight/spike/RootSpikeProtocol;" \
+              "Lcom/topjohnwu/superuser/Shell;"; do
+              if ! strings /tmp/full-debug-classes.dex | grep -qF "$symbol"; then
+                echo "symbol missing from dex: $symbol"
+                exit 1
+              fi
+              echo "dex contains: $symbol"
+            done
+            aapt2=$(ls "${ANDROID_HOME}"/build-tools/*/aapt2 | tail -1)
+            "$aapt2" dump xmltree "$apk" --file AndroidManifest.xml > /tmp/full-debug-manifest.txt
+            if ! grep -q "RootSpikeActivity" /tmp/full-debug-manifest.txt; then
+              echo "manifest does not declare RootSpikeActivity"
+              exit 1
+            fi
+            if ! grep -q "android.intent.action.LAUNCHER" /tmp/full-debug-manifest.txt; then
+              echo "manifest has no launcher activity"
+              exit 1
+            fi
+            echo "manifest declares RootSpikeActivity with a launcher intent filter"
+          } 2>&1 | tee /tmp/harness-packaged.log
+
       - name: Diagnose failures
-        if: always() && (steps.assemble.outcome != 'success' || steps.spike_unit_test.outcome != 'success' || steps.flavor_isolation.outcome != 'success')
+        if: always() && (steps.assemble.outcome != 'success' || steps.spike_unit_test.outcome != 'success' || steps.flavor_isolation.outcome != 'success' || steps.libsu_scope.outcome != 'success' || steps.harness_packaged.outcome != 'success')
         shell: bash
         run: |
           set +e
-          for log in /tmp/assemble-full-debug.log /tmp/spike-unit-test.log /tmp/flavor-isolation.log; do
+          for log in /tmp/assemble-full-debug.log /tmp/spike-unit-test.log /tmp/flavor-isolation.log /tmp/libsu-scope.log /tmp/harness-packaged.log; do
             if [ ! -f "$log" ]; then
               echo "::warning::missing log $log"
               continue
@@ -154,6 +205,8 @@ jobs:
           echo "assemble outcome: ${{ steps.assemble.outcome }}"
           echo "unit test outcome: ${{ steps.spike_unit_test.outcome }}"
           echo "flavor isolation outcome: ${{ steps.flavor_isolation.outcome }}"
+          echo "libsu scope outcome: ${{ steps.libsu_scope.outcome }}"
+          echo "harness packaging outcome: ${{ steps.harness_packaged.outcome }}"
           failed=0
           if [ "${{ steps.assemble.outcome }}" != "success" ]; then
             echo "::error::Full Debug APK build did not succeed"
@@ -165,6 +218,14 @@ jobs:
           fi
           if [ "${{ steps.flavor_isolation.outcome }}" != "success" ]; then
             echo "::error::Play/Lite flavor isolation check did not succeed"
+            failed=1
+          fi
+          if [ "${{ steps.libsu_scope.outcome }}" != "success" ]; then
+            echo "::error::libsu is not scoped to the Full Debug variant"
+            failed=1
+          fi
+          if [ "${{ steps.harness_packaged.outcome }}" != "success" ]; then
+            echo "::error::root spike harness is not packaged in the APK"
             failed=1
           fi
           exit "$failed"
