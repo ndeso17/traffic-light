@@ -43,3 +43,6 @@ framework*.jar
 *.salive
 
 release/
+
+# GitHub Actions artifacts downloaded for local inspection (.artefak/)
+.artefak/
