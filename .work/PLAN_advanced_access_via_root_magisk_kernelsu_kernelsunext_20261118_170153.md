@@ -19,8 +19,8 @@ FR-01–FR-10, NFR-01–NFR-06, dan SC-01–SC-07 dari `.work/PRD.md`.
 ---
 
 ## WP-01 — Spike akses telephony melalui root
-Status: wip
-QC: rework R1–R5 ditangani; evidence perangkat protocol v2 lengkap; handoff QC menunggu hasil job CI `full-test-baseline`.
+Status: qc
+QC: menunggu audit ulang; rework R1–R5 ditangani, evidence perangkat protocol v2 lengkap, dan full test suite lulus dua kali di CI run `44506300028`.
 
 File:
 - `.work/ROOT-SPIKE.md`
@@ -31,9 +31,9 @@ Dependensi:
 
 Tugas:
 - [x] T-001 Dokumentasikan Android/perangkat target dan data telephony minimum (FR-03, NFR-04).
-- [ ] T-002 Uji libsu grant dan allowlisted command tanpa prompt saat initialization (FR-01, FR-02, SC-05).
-- [ ] T-003 Buktikan subscription ID, slot, carrier, dan subscriber ID melalui UID root pada perangkat nyata (FR-03, SC-01).
-- [ ] T-004 Catat variasi API/transaction, SELinux, exit code, timeout, dan protocol output tanpa data sensitif (NFR-01, NFR-02, NFR-04).
+- [x] T-002 Uji libsu grant dan allowlisted command tanpa prompt saat initialization (FR-01, FR-02, SC-05).
+- [x] T-003 Buktikan subscription ID, slot, carrier, dan subscriber ID melalui UID root pada perangkat nyata (FR-03, SC-01).
+- [x] T-004 Catat variasi API/transaction, SELinux, exit code, timeout, dan protocol output tanpa data sensitif (NFR-01, NFR-02, NFR-04).
 - [x] T-005 Tetapkan GO/REWORK mekanisme produksi dan fallback (FR-05, NFR-03).
 
 Kriteria terima:
@@ -153,7 +153,49 @@ $ curl -s https://api.github.com/repos/ndeso17/traffic-light/actions/runs/444474
 
 - Unit test lokal non-Gradle: `OK (28 tests)` (27 protocol/evidence + 1 regression capture), harness compile bersih terhadap `android-37.2/android.jar` + libsu.
 - TDD untuk bug capture: test ditulis lebih dulu, gagal pada `outputSinksRegistered` dengan implementasi yang meniru perilaku libsu (output dibuang), lalu hijau setelah sink didaftarkan.
-- T-002 dan T-003 belum dicentang: grant terbukti, tetapi UID root, SELinux, dan record SIM belum terbaca pada build yang memperbaiki capture. Perlu satu rangkaian attempt baru pada artifact `14494480735`.
+- Catatan historis: pada tahap ini T-002/T-003 belum dicentang karena evidence protocol v2 belum tersedia. Kondisi tersebut ditutup oleh log handoff QC berikut.
+
+### Log WP-01 (Executor) — handoff QC protocol v2
+
+T-002–T-004 selesai berdasarkan build `8bac369`, evidence perangkat protocol v2, sumber platform Android 16, dan CI run `44506300028`:
+
+- **T-002 PASS:** seluruh attempt mencatat `startupShellRequest=false` dan `startupShellCached=false`; root baru diminta setelah `authorizationRequestedByExplicitAction=true`. Attempt denial menghasilkan `shellStatus=non_root`/status 0. Attempt grant menghasilkan status 1 dan UID 0. Attempt 7 grant → grant dicabut pengguna di root manager → attempt 8 retry menghasilkan status 0; `shellCachedBefore=false` pada keduanya membuktikan revoke dievaluasi ulang.
+- **T-003 PASS:** pada moto g57 power, Android 16 / SDK 36, dua SIM aktif, shell terverifikasi `id -u == 0`; provider menghasilkan dua record pada slot 0 dan 1, carrier hadir, dan subscriber ID hadir tanpa nilainya direkam. Sumber AOSP `android16-release` membuktikan `SubscriptionManager.UNIQUE_KEY_SUBSCRIPTION_ID` adalah `Telephony.SimInfo.COLUMN_UNIQUE_KEY_SUBSCRIPTION_ID`, yaitu `_id`; `sim_id` dan `carrier_name` juga konstanta platform.
+- **T-004 PASS:** SELinux `Enforcing`; provider canonical sukses; `dumpsys isub` Android 16 tercatat `empty_or_malformed` beserta fingerprint key-count aman; failure injection exit 1; timeout injection exit -1/`timedOut=true`; protocol v2 hanya mencatat boolean presence, slot, kategori, exit/line/record count, dan metadata perangkat non-sensitif.
+
+Evidence perangkat utama:
+
+```text
+attempt 6: non_root, shellStatusInt=0, shellCachedBefore=false
+attempt 7: root_uid_0, shellStatusInt=1, shellCachedBefore=false, recordCount=2
+attempt 8: non_root setelah grant dicabut di root manager, shellStatusInt=0, shellCachedBefore=false
+```
+
+Gate/evidence CI commit `67cbc9b`:
+
+```text
+GitHub Actions run 44506300028: completed success
+job full-test-baseline (135498708261): success
+  Full test suite run 1: success
+  Full test suite run 2: success
+  Enforce full test baseline: success
+job build-full-debug (135498708340): success
+  assembleFullDebug: success
+  root spike unit tests (41): success
+  Play/Lite flavor isolation: success
+  FullDebug libsu scope: success
+  harness packaging: success
+  public APK publication: success
+```
+
+Gerbang lokal yang tidak memakai Gradle (host lokal tidak aman untuk Gradle karena OOM/reboot): K2JVMCompiler + JUnitCore `OK (41 tests)`; `git diff --check` PASS. Full Gradle test bukan lagi blocker: dua run CI independen lulus. Tidak ada test lama yang dihapus atau dilonggarkan.
+
+Deviasi/risiko tersisa:
+
+- `dumpsys isub` Android 16 belum dikenali parser, tetapi bukan jalur evidence terpilih (`recordSource=provider`); fingerprint tanpa value tercatat untuk WP-09.
+- `carrierValueSafe=false` pada satu record adalah hasil sanitizer, bukan field hilang (`carrierPresent=true`); nama carrier tidak dicatat.
+- Evidence perangkat ini mencakup satu kombinasi Motorola/Android 16/KernelSU Next. Magisk, KernelSU, Android minimum, dan OEM lain tetap wajib di WP-09 dan tetap blocker release, bukan blocker spike WP-01.
+- File protocol v1 `Download/traffic-light-root-spike-attempt-1.txt` adalah evidence denial lama (2026-11-19 02:28 UTC), konsisten tetapi superseded oleh protocol v2; tidak dipakai sebagai bukti utama.
 
 ---
 

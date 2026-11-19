@@ -2,9 +2,9 @@
 
 ## Keputusan
 
-**Device evidence lengkap; WP-01 diajukan ke QC.** Seluruh field domain berhasil dibaca sebagai UID 0 pada perangkat fisik multi-SIM (moto g57 power, Android 16 / SDK 36, KernelSU Next), dan jalur grant, denial, serta revoke/retry terbukti dari harness Full-only tanpa prompt saat startup.
+**Device evidence lengkap; WP-01 diajukan ke QC.** Seluruh field domain berhasil dibaca sebagai UID 0 pada perangkat fisik multi-SIM (moto g57 power, Android 16 / SDK 36, KernelSU Next), dan jalur grant, denial, serta revoke/retry terbukti dari harness Full-only tanpa prompt saat startup. Full test suite repository lulus dua kali berturut-turut di CI run `44506300028`, sehingga REWORK-R4 tidak lagi menjadi blocker.
 
-Satu gate repository masih **BLOCKED** dan tidak diklaim PASS: `bash gradlew test` tidak dapat menghasilkan baseline hijau di environment executor (MockK/ByteBuddy external attach di `:playIntegration:testDebugUnitTest` dan kegagalan fetch `org.robolectric:android-all-instrumented`), sehingga dijalankan ulang lewat job CI terpisah `full-test-baseline`. Dukungan Magisk, KernelSU, dan OEM lain tetap menjadi blocker release (WP-09).
+Dukungan Magisk, KernelSU, KernelSU Next versi lain, Android minimum, dan OEM lain tetap menjadi blocker release (WP-09).
 
 ## Status per 2026-11-19
 
@@ -14,7 +14,7 @@ Satu gate repository masih **BLOCKED** dan tidak diklaim PASS: `bash gradlew tes
 | T-003 subscription ID/slot/carrier/subscriber via UID 0 | PASS | `shellStatus=root_uid_0`, 2 record aktif, `recordSource=provider` |
 | T-004 SELinux, exit code, timeout, protocol, redaksi | PASS | `selinux=Enforcing`, `command_failure`, `timeout`, protocol v2 |
 | Revoke/retry | PASS | attempt 7 grant → attempt 8 `non_root` dengan `shellCachedBefore=false` setelah grant dicabut di root manager |
-| `bash gradlew test` baseline | BLOCKED (environment) | Lihat bagian "Gate repository" |
+| `bash gradlew test` baseline | PASS | CI run `44506300028`, job `full-test-baseline`: dua run berturut-turut `success` |
 
 ### Mengapa `_id` adalah subscription ID (bukan asumsi)
 
@@ -259,8 +259,18 @@ Audit privasi atas file protocol v2: tidak ada nilai `_id`, IMSI/subscriber ID, 
 - GitHub Actions run `44481850855`, commit `8bac369`: **SUCCESS**.
 - `:app:assembleFullDebug`, 41 unit test spike, isolasi Play/Lite, scope libsu FullDebug, packaging harness, dan publikasi APK: PASS.
 - Verifikasi lokal non-Gradle: K2JVMCompiler + JUnitCore → `OK (41 tests)`; `git diff --check` PASS.
-- Full `bash gradlew test`: **BLOCKED / tidak diklaim PASS**, sesuai REWORK-R4. Baseline sebelumnya gagal karena MockK/ByteBuddy external attach dan fetch artifact Robolectric; build Gradle lokal tidak diulang karena host pernah OOM/reboot.
+- Full `bash gradlew test`: **PASS dua kali berturut-turut** pada CI run `44506300028`, job `full-test-baseline` (`Full test suite run 1` dan `run 2` keduanya success; enforcement success). Blocker MockK/ByteBuddy dan fetch Robolectric yang ditemukan pada host lokal tidak muncul di runner bersih.
 
 ## Syarat keluar REWORK
 
-Syarat evidence perangkat untuk T-002–T-004 terpenuhi. WP-01 dapat diajukan kembali ke QC dengan keputusan teknis **GO untuk melanjutkan desain backend WP-03**, tetap fail-safe ke Shizuku → Basic. Ini bukan approval release: coverage Magisk, KernelSU, KernelSU Next lain, versi Android minimum, dan OEM lain tetap wajib di WP-09. Gate full test repository tetap blocker environment terbuka yang harus dinilai QC, bukan disamarkan sebagai PASS.
+Seluruh item REWORK-R1–R5 terpenuhi: matrix berisi evidence perangkat rooted multi-SIM yang membuktikan seluruh field, no-prompt saat initialization, prompt setelah aksi eksplisit, grant/denial/revoke/retry, exit-code/timeout/parser behavior, redaksi data sensitif, dan baseline full test suite yang lulus dua kali.
+
+Keputusan teknis: **GO untuk melanjutkan desain backend WP-03**, tetap fail-safe ke Shizuku → Basic. Ini bukan approval release. Dukungan Magisk, KernelSU, KernelSU Next versi lain, Android minimum, dan OEM lain tetap wajib di WP-09 sebagai blocker release.
+
+Known gaps yang diteruskan, bukan disembunyikan:
+
+- Parser `dumpsys isub` belum mengenali format Android 16; jalur ini tidak dipakai sebagai sumber record.
+- Satu nama carrier tidak lolos allowlist karakter evidence; tidak ada nilai carrier yang dicatat.
+- Coverage root manager/OEM tunggal.
+
+Catatan bukti historis: `Download/traffic-light-root-spike-attempt-1.txt` adalah file protocol v1 (02:28 UTC) dari build awal; isinya konsisten dengan denial protocol v2 tetapi superseded dan bukan bukti utama.
