@@ -40,7 +40,11 @@ class PrivilegedAccessTest {
         }
 
         override suspend fun enable(): PrivilegedAccessOutcome<Unit> =
-            if (authorization == BackendAuthorization.Granted) {
+            if (authorization in setOf(
+                    BackendAuthorization.Granted,
+                    BackendAuthorization.NotRequired,
+                )
+            ) {
                 PrivilegedAccessOutcome.Success(Unit)
             } else {
                 PrivilegedAccessOutcome.Failure(PrivilegedAccessError.AuthorizationDenied)
@@ -152,8 +156,11 @@ class PrivilegedAccessTest {
 
         assertEquals(errors.size, errors.toSet().size)
         errors.forEach { error ->
-            // A data object has no fields at all, so nothing can be smuggled into a log line.
-            assertTrue("unexpected payload on $error", error::class.java.declaredFields.isEmpty())
+            // Kotlin object instances have only the compiler-generated INSTANCE singleton; no
+            // String/Throwable/record payload can be smuggled into a log or UI error.
+            val payloadFields = error::class.java.declaredFields
+                .filterNot { field -> field.name == "INSTANCE" }
+            assertTrue("unexpected payload on $error", payloadFields.isEmpty())
         }
     }
 
