@@ -2,8 +2,20 @@ package com.leekleak.trafficlight.integrations
 
 import org.koin.dsl.bind
 import org.koin.dsl.module
-import org.koin.plugin.module.dsl.single
 
 val integrationsModule = module {
-    single<ShizukuServicesProviderImpl>() bind ShizukuServicesProvider::class
+    single { ShizukuServicesProviderImpl(get()) } bind ShizukuServicesProvider::class
+
+    // Lite has no privileged backend at all: the coordinator always resolves to Basic.
+    single<PrivilegedAccessProvider> {
+        PrivilegedAccessProviderImpl(
+            backends = listOf(
+                ShizukuPrivilegedBackend(),
+                BasicPrivilegedBackend(),
+            ),
+            appPreferenceRepo = get(),
+            dataPlanManager = get(),
+            scope = get(),
+        )
+    }
 }

@@ -15,22 +15,22 @@ import android.provider.Settings
 import android.widget.Toast
 import androidx.core.net.toUri
 import com.leekleak.core.R
-import com.leekleak.trafficlight.database.AppPreferenceRepo
-import com.leekleak.trafficlight.integrations.ShizukuServicesProvider
+import com.leekleak.trafficlight.integrations.PrivilegedAccessProvider
+import com.leekleak.trafficlight.integrations.PrivilegedAccessState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
+/**
+ * Owns the non-privileged system permissions and forwards advanced-access intent to
+ * [PrivilegedAccessProvider]. It never triggers an authorization prompt by itself: the only
+ * prompting entry point is [requestAdvancedAccess], which the UI calls from an explicit action.
+ */
 class PermissionManager(
     private val context: Context,
     private val scope: CoroutineScope,
-    private val appPreferenceRepo: AppPreferenceRepo,
-    private val shizukuServicesProvider: ShizukuServicesProvider
+    private val privilegedAccessProvider: PrivilegedAccessProvider,
 ) {
     val backgroundPermission: StateFlow<Boolean>
         field = MutableStateFlow(false)
@@ -44,35 +44,17 @@ class PermissionManager(
     val overlayPermission: StateFlow<Boolean>
         field = MutableStateFlow(false)
 
-    val shizukuRunning: StateFlow<Boolean>
-        field = MutableStateFlow(false)
+    val advancedAccessState: StateFlow<PrivilegedAccessState> = privilegedAccessProvider.state
 
-    val shizukuPermissionGranted: StateFlow<Boolean> =
-        appPreferenceRepo.shizukuPermissionGranted.stateIn(scope, SharingStarted.Eagerly, false)
+    val advancedAccessEnabled: StateFlow<Boolean> = privilegedAccessProvider.enabled
 
-    init {
-        scope.launch {
-            combine(
-                appPreferenceRepo.shizukuPermissionGranted,
-                shizukuRunning
-            ) { granted, running -> granted to running }
-                .collectLatest { (granted, running) ->
-                    if (granted && running) {
-                        if (!shizukuServicesProvider.enable()) {
-                            appPreferenceRepo.setShizukuPermissionGranted(false)
-                        }
-                    } else {
-                        shizukuServicesProvider.disable()
-                        if (!granted) shizukuServicesProvider.updateSimData()
-                    }
-                }
-        }
+    /** Explicit user action: this is the only path that may show a root or Shizuku prompt. */
+    fun requestAdvancedAccess() {
+        scope.launch { privilegedAccessProvider.requestAccess() }
     }
 
-    fun requestShizukuPermission() {
-        if (shizukuRunning.value) {
-            shizukuServicesProvider.shizukuRequestPermission()
-        }
+    fun stopAdvancedAccess() {
+        scope.launch { privilegedAccessProvider.stop() }
     }
 
     fun askBackgroundPermission(activity: Activity?) {
@@ -144,17 +126,7 @@ class PermissionManager(
 
         overlayPermission.value = Settings.canDrawOverlays(context)
 
-        shizukuRunning.value = shizukuServicesProvider.shizukuRunning()
-        if (shizukuRunning.value) {
-            val permission = runCatching {
-                shizukuServicesProvider.shizukuPermission()
-            }.getOrNull()
-            if (permission != null) {
-                val granted = permission == PackageManager.PERMISSION_GRANTED
-                if (shizukuPermissionGranted.value != granted) {
-                    scope.launch { appPreferenceRepo.setShizukuPermissionGranted(granted) }
-                }
-            }
-        }
+        // Re-evaluate backend health on lifecycle events only. This path never prompts.
+        scope.launch { privilegedAccessProvider.refresh() }
     }
 }

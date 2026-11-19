@@ -79,6 +79,22 @@ class AppPreferenceRepo (
     val shizukuPermissionGranted: Flow<Boolean> = data.map { it[SHIZUKU_PERMISSION_GRANTED] ?: false }.distinctUntilChanged()
     suspend fun setShizukuPermissionGranted(value: Boolean) = dataStore.edit { it[SHIZUKU_PERMISSION_GRANTED] = value }
 
+    /**
+     * User intent for advanced access. It is deliberately separate from any runtime grant:
+     * the legacy `shizuku_tracking` key is only read as intent, never as "root granted".
+     */
+    val advancedAccessEnabled: Flow<Boolean> = data
+        .map { prefs ->
+            prefs[ADVANCED_ACCESS_ENABLED]
+                ?: prefs[SHIZUKU_PERMISSION_GRANTED]
+                ?: false
+        }
+        .distinctUntilChanged()
+
+    suspend fun setAdvancedAccessEnabled(value: Boolean) = dataStore.edit {
+        it[ADVANCED_ACCESS_ENABLED] = value
+    }
+
     val overviewDataType: Flow<DataType> = data.map { prefs -> prefs[OVERVIEW_DATA_TYPE]?.let { valueOfOrNull<DataType>(it) } ?: DataType.Mobile }.distinctUntilChanged()
     suspend fun setOverviewDataType(value: DataType) = dataStore.edit { it[OVERVIEW_DATA_TYPE] = value.name }
 
@@ -99,6 +115,7 @@ class AppPreferenceRepo (
         private val THEME = stringPreferencesKey("theme")
         private val BLUR = booleanPreferencesKey("blur")
         private val SHIZUKU_PERMISSION_GRANTED = booleanPreferencesKey("shizuku_tracking")
+        private val ADVANCED_ACCESS_ENABLED = booleanPreferencesKey("advanced_access_enabled")
         private val OVERVIEW_DATA_TYPE = stringPreferencesKey("overview_data_type")
         private val OVERVIEW_RANGE = stringPreferencesKey("overview_range")
     }
