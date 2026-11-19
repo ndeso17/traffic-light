@@ -272,3 +272,124 @@ jobs:
             failed=1
           fi
           exit "$failed"
+
+  # REWORK-R4: the executor host cannot run the full Gradle test suite (OOM/reboot),
+  # so the baseline is executed on the runner instead. This job is intentionally
+  # independent from build-full-debug: a red baseline must never hide an APK build
+  # failure, and an APK build must never hide a red baseline.
+  full-test-baseline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
+          fetch-depth: 1
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: gradle
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+        with:
+          accept-android-sdk-licenses: true
+
+      - name: Accept SDK licenses
+        shell: bash
+        run: yes | sdkmanager --licenses > /dev/null 2>&1 || true
+
+      - name: Install Android build tools
+        shell: bash
+        run: |
+          sdkmanager \
+            "platform-tools" \
+            "platforms;android-37.2" \
+            "build-tools;36.0.0" \
+            "build-tools;35.0.0" \
+            "cmake;4.1.2" \
+            "ndk;30.0.16248370"
+
+      - name: Full test suite run 1
+        id: suite_run_1
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          ./gradlew --no-daemon --max-workers=2 \
+            test --stacktrace 2>&1 | tee /tmp/full-test-run-1.log
+
+      - name: Full test suite run 2
+        id: suite_run_2
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          ./gradlew --no-daemon --max-workers=2 \
+            test --stacktrace 2>&1 | tee /tmp/full-test-run-2.log
+
+      - name: Summarise full test baseline
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          {
+            echo "### full test baseline"
+            echo "run 1 outcome: ${{ steps.suite_run_1.outcome }}"
+            echo "run 2 outcome: ${{ steps.suite_run_2.outcome }}"
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+          for log in /tmp/full-test-run-1.log /tmp/full-test-run-2.log; do
+            if [ ! -f "$log" ]; then
+              echo "::warning::missing log $log"
+              continue
+            fi
+            block=$(awk '/FAILURE: Build failed/{flag=1} flag' "$log" | head -40)
+            if [ -z "$block" ]; then
+              block=$(tail -40 "$log")
+            fi
+            {
+              echo "### $(basename "$log")"
+              echo '```text'
+              printf '%s\n' "$block"
+              echo '```'
+            } | tee -a "$GITHUB_STEP_SUMMARY"
+          done
+
+      - name: Upload full test reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: full-test-reports-${{ github.sha }}
+          path: |
+            app/build/reports/tests/**
+            app/build/test-results/**
+            core/build/reports/tests/**
+            core/build/test-results/**
+            playIntegration/build/reports/tests/**
+            playIntegration/build/test-results/**
+            iperfIntegration/build/reports/tests/**
+            iperfIntegration/build/test-results/**
+            shizukuIntegration/build/reports/tests/**
+            shizukuIntegration/build/test-results/**
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Enforce full test baseline
+        if: always()
+        shell: bash
+        run: |
+          failed=0
+          if [ "${{ steps.suite_run_1.outcome }}" != "success" ]; then
+            echo "::error::full test suite run 1 did not succeed"
+            failed=1
+          fi
+          if [ "${{ steps.suite_run_2.outcome }}" != "success" ]; then
+            echo "::error::full test suite run 2 did not succeed"
+            failed=1
+          fi
+          exit "$failed"

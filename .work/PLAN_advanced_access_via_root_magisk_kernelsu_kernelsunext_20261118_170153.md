@@ -20,7 +20,7 @@ FR-01–FR-10, NFR-01–NFR-06, dan SC-01–SC-07 dari `.work/PRD.md`.
 
 ## WP-01 — Spike akses telephony melalui root
 Status: wip
-QC: FAIL — `.work/QC-WP-01.md`; T-002–T-004 belum terbukti pada perangkat, lihat REWORK-R1–R5.
+QC: rework R1–R5 ditangani; evidence perangkat protocol v2 lengkap; handoff QC menunggu hasil job CI `full-test-baseline`.
 
 File:
 - `.work/ROOT-SPIKE.md`
